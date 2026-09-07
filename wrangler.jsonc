@@ -18,8 +18,5 @@
 "pattern": "52b.munot.app",
 "custom_domain": true
 }
-],
-"triggers": {
-"crons": ["0 3 * * *"]
-}
+]
 }
