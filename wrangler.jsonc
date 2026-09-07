@@ -1,22 +1,22 @@
+﻿{
+"name": "seestrasse52b",
+"compatibility_date": "2025-06-05",
+"main": "src/index.js",
+"assets": {
+"directory": "./public",
+"binding": "ASSETS"
+},
+"d1_databases": [
 {
-	"name": "seestrasse52b",
-	"compatibility_date": "2025-06-05",
-	"main": "src/index.js",
-	"assets": {
-		"directory": "./public",
-		"binding": "ASSETS"
-	},
-	"d1_databases": [
-		{
-			"binding": "DB",
-			"database_name": "seestrasse52b",
-			"database_id": "8114362a-d78d-4c17-9f47-9abee82f3e26"
-		}
-	],
-	"routes": [
-		{
-			"pattern": "52b.munot.app/*",
-			"custom_domain": true
-		}
-	]
+"binding": "DB",
+"database_name": "seestrasse52b",
+"database_id": "8114362a-d78d-4c17-9f47-9abee82f3e26"
+}
+],
+"routes": [
+{
+"pattern": "52b.munot.app",
+"custom_domain": true
+}
+]
 }
