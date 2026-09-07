@@ -35,6 +35,15 @@
         <label for="n_unit">Einheit</label>
         <input id="n_unit" type="text" placeholder="z.B. °C">
       </div>
+      <div class="field">
+        <label for="n_type">Typ</label>
+        <input id="n_type" type="text" list="typeOptions" value="Generic" placeholder="z.B. Generic, Sensor">
+        <datalist id="typeOptions"><option value="Generic"></option><option value="Sensor"></option></datalist>
+      </div>
+      <div class="field">
+        <label for="n_label">Label</label>
+        <input id="n_label" type="text" placeholder="z.B. Wohnzimmer (nur bei Sensor/Eve)">
+      </div>
     </div>
     <button id="addBtn">Parameter anlegen</button>
   </div>
@@ -42,11 +51,49 @@
   <h1>Bestehende Parameter</h1>
   <div id="listMsg" class="msg" style="display:none;"></div>
   <table>
-    <thead><tr><th>ParameterID</th><th>Gruppe</th><th>Name</th><th>Einheit</th><th>Typ</th><th>Status</th><th>Einträge</th><th></th></tr></thead>
+    <thead><tr><th>ParameterID</th><th>Gruppe</th><th>Name</th><th>Einheit</th><th>Typ</th><th>Label</th><th>Status</th><th>Einträge</th><th></th></tr></thead>
     <tbody id="rows"></tbody>
   </table>
   <div id="empty" class="empty" style="display:none;">Noch keine Parameter angelegt.</div>
   <button id="refreshBtn" class="secondary" style="margin-top:14px;">Aktualisieren</button>
+
+  <h1 style="margin-top:36px;">Default Parameter</h1>
+  <p style="color:var(--muted,#888);margin-top:-8px;">
+    Standardwerte, die der tägliche Job automatisch in <code>seestrasse52b_values</code> einträgt,
+    falls für den Tag noch kein Wert vorhanden ist. Manuell erfasste Werte werden dabei nicht überschrieben.
+  </p>
+  <div id="defMsg" class="msg" style="display:none;"></div>
+  <div class="card" style="margin-bottom:26px;">
+    <div class="row">
+      <div class="field">
+        <label for="d_param">Parameter</label>
+        <select id="d_param"></select>
+      </div>
+      <div class="field">
+        <label for="d_value">Standardwert</label>
+        <input id="d_value" type="number" step="any" placeholder="z.B. 1">
+      </div>
+    </div>
+    <div class="field">
+      <label>Wochentage</label>
+      <div id="d_weekdays" style="display:flex;gap:14px;flex-wrap:wrap;">
+        <label style="display:flex;align-items:center;gap:4px;"><input type="checkbox" value="1" checked style="width:auto;"> Mo</label>
+        <label style="display:flex;align-items:center;gap:4px;"><input type="checkbox" value="2" checked style="width:auto;"> Di</label>
+        <label style="display:flex;align-items:center;gap:4px;"><input type="checkbox" value="3" checked style="width:auto;"> Mi</label>
+        <label style="display:flex;align-items:center;gap:4px;"><input type="checkbox" value="4" checked style="width:auto;"> Do</label>
+        <label style="display:flex;align-items:center;gap:4px;"><input type="checkbox" value="5" checked style="width:auto;"> Fr</label>
+        <label style="display:flex;align-items:center;gap:4px;"><input type="checkbox" value="6" checked style="width:auto;"> Sa</label>
+        <label style="display:flex;align-items:center;gap:4px;"><input type="checkbox" value="7" checked style="width:auto;"> So</label>
+      </div>
+    </div>
+    <button id="addDefBtn">Default speichern</button>
+  </div>
+
+  <table>
+    <thead><tr><th>ParameterID</th><th>Parameter</th><th>Standardwert</th><th>Wochentage</th><th>Status</th><th></th></tr></thead>
+    <tbody id="defRows"></tbody>
+  </table>
+  <div id="defEmpty" class="empty" style="display:none;">Noch keine Default-Werte definiert.</div>
 </main>
 
 <dialog id="editDialog">
@@ -56,6 +103,8 @@
     <div class="field"><label>Gruppe</label><input id="e_group" type="text" list="groupOptions"></div>
     <div class="field"><label>Name</label><input id="e_name" type="text"></div>
     <div class="field"><label>Einheit</label><input id="e_unit" type="text"></div>
+    <div class="field"><label>Typ</label><input id="e_type" type="text" list="typeOptions"></div>
+    <div class="field"><label>Label</label><input id="e_label" type="text" placeholder="z.B. Wohnzimmer (nur bei Sensor/Eve)"></div>
     <div class="field">
       <label style="display:flex;align-items:center;gap:8px;">
         <input type="checkbox" id="e_active" style="width:auto;"> Aktiv
@@ -69,18 +118,52 @@
   </div>
 </dialog>
 
+<dialog id="editDefaultDialog">
+  <div class="card">
+    <h2>Default bearbeiten</h2>
+    <input type="hidden" id="ed_id">
+    <div class="field"><label>Parameter</label><div id="ed_name" style="padding:8px 0;font-weight:600;"></div></div>
+    <div class="field"><label for="ed_value">Standardwert</label><input id="ed_value" type="number" step="any"></div>
+    <div class="field">
+      <label>Wochentage</label>
+      <div id="ed_weekdays" style="display:flex;gap:14px;flex-wrap:wrap;">
+        <label style="display:flex;align-items:center;gap:4px;"><input type="checkbox" value="1" style="width:auto;"> Mo</label>
+        <label style="display:flex;align-items:center;gap:4px;"><input type="checkbox" value="2" style="width:auto;"> Di</label>
+        <label style="display:flex;align-items:center;gap:4px;"><input type="checkbox" value="3" style="width:auto;"> Mi</label>
+        <label style="display:flex;align-items:center;gap:4px;"><input type="checkbox" value="4" style="width:auto;"> Do</label>
+        <label style="display:flex;align-items:center;gap:4px;"><input type="checkbox" value="5" style="width:auto;"> Fr</label>
+        <label style="display:flex;align-items:center;gap:4px;"><input type="checkbox" value="6" style="width:auto;"> Sa</label>
+        <label style="display:flex;align-items:center;gap:4px;"><input type="checkbox" value="7" style="width:auto;"> So</label>
+      </div>
+    </div>
+    <div class="field">
+      <label style="display:flex;align-items:center;gap:8px;">
+        <input type="checkbox" id="ed_enabled" style="width:auto;"> Aktiv
+      </label>
+    </div>
+    <div id="editDefMsg" class="msg" style="display:none;"></div>
+    <div class="actions">
+      <button class="secondary" id="cancelEditDef">Abbrechen</button>
+      <button id="saveEditDef">Speichern</button>
+    </div>
+  </div>
+</dialog>
+
 <script src="assets/db.js"></script>
 <script>
 const addMsg = document.getElementById('addMsg');
 const listMsg = document.getElementById('listMsg');
+const defMsg = document.getElementById('defMsg');
 let params = [];
 let counts = {};
+let defaults = [];
+const WEEKDAY_LABELS = {1:'Mo',2:'Di',3:'Mi',4:'Do',5:'Fr',6:'Sa',7:'So'};
 
 async function load(forceRefresh){
   const client = getClient();
   if(forceRefresh) cacheInvalidate('param:');
   params = await queryCached(client, 'param:all',
-    "SELECT ParameterID, ParaGroup, Name, Einheit, Active, ParaType FROM seestrasse52b_parameter ORDER BY ParaGroup, Name"
+    "SELECT ParameterID, ParaGroup, Name, Einheit, Active, ParaType, Label FROM seestrasse52b_parameter ORDER BY ParaGroup, Name"
   );
   const cRows = await queryCached(client, 'log:counts_by_param',
     'SELECT ParameterID, COUNT(*) AS cnt FROM seestrasse52b_values GROUP BY ParameterID'
@@ -111,6 +194,7 @@ function render(){
       <td>${escapeHtml(p.Name)}</td>
       <td>${escapeHtml(p.Einheit)}</td>
       <td>${escapeHtml(p.ParaType)}</td>
+      <td>${escapeHtml(p.Label)}</td>
       <td><span class="badge ${Number(p.Active)===1 ? 'on':'off'}">${Number(p.Active)===1 ? 'Aktiv':'Inaktiv'}</span></td>
       <td class="num">${counts[p.ParameterID] || 0}</td>
       <td style="white-space:nowrap;">
@@ -125,20 +209,25 @@ document.getElementById('addBtn').addEventListener('click', async () => {
   const group = document.getElementById('n_group').value.trim();
   const name = document.getElementById('n_name').value.trim();
   const unit = document.getElementById('n_unit').value.trim();
+  const type = document.getElementById('n_type').value.trim() || 'Generic';
+  const label = document.getElementById('n_label').value.trim();
   if(!group){ showMsg(addMsg, 'Gruppe ist erforderlich.', 'err'); return; }
   if(!name){ showMsg(addMsg, 'Name ist erforderlich.', 'err'); return; }
   try{
     const client = getClient();
     await client.execute(
-      "INSERT INTO seestrasse52b_parameter (ParaGroup, Name, Einheit, Active, ParaType, table_field, table_name) VALUES (?, ?, ?, 1, 'Generic', 'parameterID', 'seestrasse52b_values')",
-      [group, name, unit || null]
+      "INSERT INTO seestrasse52b_parameter (ParaGroup, Name, Einheit, Active, ParaType, Label, table_field, table_name) VALUES (?, ?, ?, 1, ?, ?, 'parameterID', 'seestrasse52b_values')",
+      [group, name, unit || null, type, label || null]
     );
     showMsg(addMsg, 'Parameter angelegt.', 'ok');
     document.getElementById('n_group').value = '';
     document.getElementById('n_name').value = '';
     document.getElementById('n_unit').value = '';
+    document.getElementById('n_type').value = 'Generic';
+    document.getElementById('n_label').value = '';
     invalidateAfterParamChange();
     await load();
+    updateParamSelect();
   }catch(e){
     showMsg(addMsg, 'Fehler: ' + e.message, 'err');
   }
@@ -152,6 +241,8 @@ window.openEdit = function(id){
   document.getElementById('e_group').value = p.ParaGroup || '';
   document.getElementById('e_name').value = p.Name;
   document.getElementById('e_unit').value = p.Einheit || '';
+  document.getElementById('e_type').value = p.ParaType || '';
+  document.getElementById('e_label').value = p.Label || '';
   document.getElementById('e_active').checked = Number(p.Active) === 1;
   document.getElementById('editMsg').style.display = 'none';
   dialog.showModal();
@@ -164,15 +255,18 @@ document.getElementById('saveEdit').addEventListener('click', async () => {
   const group = document.getElementById('e_group').value.trim();
   const name = document.getElementById('e_name').value.trim();
   const unit = document.getElementById('e_unit').value.trim();
+  const type = document.getElementById('e_type').value.trim() || 'Generic';
+  const label = document.getElementById('e_label').value.trim();
   const active = document.getElementById('e_active').checked ? 1 : 0;
   if(!group){ showMsg(editMsg, 'Gruppe ist erforderlich.', 'err'); return; }
   if(!name){ showMsg(editMsg, 'Name ist erforderlich.', 'err'); return; }
   try{
     const client = getClient();
-    await client.execute('UPDATE seestrasse52b_parameter SET ParaGroup=?, Name=?, Einheit=?, Active=? WHERE ParameterID=?', [group, name, unit || null, active, Number(id)]);
+    await client.execute('UPDATE seestrasse52b_parameter SET ParaGroup=?, Name=?, Einheit=?, ParaType=?, Label=?, Active=? WHERE ParameterID=?', [group, name, unit || null, type, label || null, active, Number(id)]);
     dialog.close();
     invalidateAfterParamChange();
     await load();
+    updateParamSelect();
   }catch(e){
     showMsg(editMsg, 'Fehler: ' + e.message, 'err');
   }
@@ -190,14 +284,142 @@ window.delParam = async function(id){
     await client.execute('DELETE FROM seestrasse52b_parameter WHERE ParameterID=?', [Number(id)]);
     invalidateAfterParamChange();
     await load();
+    updateParamSelect();
   }catch(e){
     showMsg(listMsg, 'Fehler beim Löschen: ' + e.message, 'err');
   }
 };
 
-document.getElementById('refreshBtn').addEventListener('click', () => load(true));
+document.getElementById('refreshBtn').addEventListener('click', () => { load(true); loadDefaults(true); });
 
-load().catch(e => showMsg(listMsg, 'Fehler beim Laden: ' + e.message, 'err'));
+/* ---- Default Parameter ---- */
+
+async function loadDefaults(forceRefresh){
+  const client = getClient();
+  if(forceRefresh) cacheInvalidate('defaults:');
+  defaults = await queryCached(client, 'defaults:all',
+    `SELECT d.ParameterID, d.value, d.weekdays, d.enabled, p.Name, p.ParaGroup, p.Einheit
+     FROM seestrasse52b_defaults d
+     JOIN seestrasse52b_parameter p ON p.ParameterID = d.ParameterID
+     ORDER BY p.ParaGroup, p.Name`
+  );
+  updateParamSelect();
+  renderDefaults();
+}
+
+function updateParamSelect(){
+  const sel = document.getElementById('d_param');
+  const usedIds = new Set(defaults.map(d => String(d.ParameterID)));
+  const options = params
+    .filter(p => !usedIds.has(String(p.ParameterID)))
+    .map(p => `<option value="${p.ParameterID}">${escapeHtml(p.ParaGroup)} · ${escapeHtml(p.Name)} (#${p.ParameterID})</option>`)
+    .join('');
+  sel.innerHTML = options || '<option value="">Keine weiteren Parameter verfügbar</option>';
+}
+
+function weekdaysLabel(str){
+  const days = (str || '').split(',').map(s => s.trim()).filter(Boolean);
+  if(days.length === 7) return 'täglich';
+  return days.map(d => WEEKDAY_LABELS[d] || d).join(', ');
+}
+
+function getCheckedWeekdays(containerId){
+  return [...document.querySelectorAll(`#${containerId} input[type=checkbox]:checked`)].map(cb => cb.value);
+}
+
+function renderDefaults(){
+  document.getElementById('defEmpty').style.display = defaults.length ? 'none' : 'block';
+  document.getElementById('defRows').innerHTML = defaults.map(d => `
+    <tr>
+      <td class="num">${d.ParameterID}</td>
+      <td>${escapeHtml(d.ParaGroup)} · ${escapeHtml(d.Name)}${d.Einheit ? ' (' + escapeHtml(d.Einheit) + ')' : ''}</td>
+      <td class="num">${d.value}</td>
+      <td>${escapeHtml(weekdaysLabel(d.weekdays))}</td>
+      <td><span class="badge ${Number(d.enabled)===1 ? 'on':'off'}">${Number(d.enabled)===1 ? 'Aktiv':'Inaktiv'}</span></td>
+      <td style="white-space:nowrap;">
+        <button class="small secondary" onclick="openEditDefault(${d.ParameterID})">Bearbeiten</button>
+        <button class="small danger" onclick="delDefault(${d.ParameterID})">Löschen</button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+document.getElementById('addDefBtn').addEventListener('click', async () => {
+  const paramId = document.getElementById('d_param').value;
+  const value = document.getElementById('d_value').value;
+  const weekdays = getCheckedWeekdays('d_weekdays');
+  if(!paramId){ showMsg(defMsg, 'Bitte einen Parameter wählen.', 'err'); return; }
+  if(value === '' || isNaN(Number(value))){ showMsg(defMsg, 'Standardwert ist erforderlich.', 'err'); return; }
+  if(!weekdays.length){ showMsg(defMsg, 'Mindestens ein Wochentag muss gewählt sein.', 'err'); return; }
+  try{
+    const client = getClient();
+    await client.execute(
+      `INSERT INTO seestrasse52b_defaults (ParameterID, value, weekdays, enabled, modified_at)
+       VALUES (?, ?, ?, 1, datetime('now'))
+       ON CONFLICT(ParameterID) DO UPDATE SET value=excluded.value, weekdays=excluded.weekdays, enabled=1, modified_at=excluded.modified_at`,
+      [Number(paramId), Number(value), weekdays.join(',')]
+    );
+    showMsg(defMsg, 'Default gespeichert.', 'ok');
+    document.getElementById('d_value').value = '';
+    cacheInvalidate('defaults:');
+    await loadDefaults();
+  }catch(e){
+    showMsg(defMsg, 'Fehler: ' + e.message, 'err');
+  }
+});
+
+const editDefaultDialog = document.getElementById('editDefaultDialog');
+window.openEditDefault = function(id){
+  const d = defaults.find(x => String(x.ParameterID) === String(id));
+  if(!d) return;
+  document.getElementById('ed_id').value = d.ParameterID;
+  document.getElementById('ed_name').textContent = `${d.ParaGroup} · ${d.Name} (#${d.ParameterID})`;
+  document.getElementById('ed_value').value = d.value;
+  const days = new Set((d.weekdays || '').split(',').map(s => s.trim()));
+  document.querySelectorAll('#ed_weekdays input[type=checkbox]').forEach(cb => { cb.checked = days.has(cb.value); });
+  document.getElementById('ed_enabled').checked = Number(d.enabled) === 1;
+  document.getElementById('editDefMsg').style.display = 'none';
+  editDefaultDialog.showModal();
+};
+document.getElementById('cancelEditDef').addEventListener('click', () => editDefaultDialog.close());
+
+document.getElementById('saveEditDef').addEventListener('click', async () => {
+  const editDefMsg = document.getElementById('editDefMsg');
+  const id = document.getElementById('ed_id').value;
+  const value = document.getElementById('ed_value').value;
+  const weekdays = getCheckedWeekdays('ed_weekdays');
+  const enabled = document.getElementById('ed_enabled').checked ? 1 : 0;
+  if(value === '' || isNaN(Number(value))){ showMsg(editDefMsg, 'Standardwert ist erforderlich.', 'err'); return; }
+  if(!weekdays.length){ showMsg(editDefMsg, 'Mindestens ein Wochentag muss gewählt sein.', 'err'); return; }
+  try{
+    const client = getClient();
+    await client.execute(
+      `UPDATE seestrasse52b_defaults SET value=?, weekdays=?, enabled=?, modified_at=datetime('now') WHERE ParameterID=?`,
+      [Number(value), weekdays.join(','), enabled, Number(id)]
+    );
+    editDefaultDialog.close();
+    cacheInvalidate('defaults:');
+    await loadDefaults();
+  }catch(e){
+    showMsg(editDefMsg, 'Fehler: ' + e.message, 'err');
+  }
+});
+
+window.delDefault = async function(id){
+  if(!confirm('Diesen Default-Wert wirklich löschen?')) return;
+  try{
+    const client = getClient();
+    await client.execute('DELETE FROM seestrasse52b_defaults WHERE ParameterID=?', [Number(id)]);
+    cacheInvalidate('defaults:');
+    await loadDefaults();
+  }catch(e){
+    showMsg(defMsg, 'Fehler beim Löschen: ' + e.message, 'err');
+  }
+};
+
+load()
+  .then(() => loadDefaults())
+  .catch(e => showMsg(listMsg, 'Fehler beim Laden: ' + e.message, 'err'));
 </script>
   <script src="https://munotstadt.github.io/db_admin/assets/improvements-button.js" data-app="seestrasse52b" data-position="left"></script>
 </body>
