@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Seestrasse 52B · Log</title>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">Seestrasse <span>52B</span></div>
+  <nav class="tabs">
+    <a href="index.html">Übersicht</a>
+    <a href="log.html" class="active">Log</a>
+    <a href="eve-data.html">Eve-Data</a>
+    <a href="uploader.html">Uploader</a>
+    <a href="admin.html">Admin</a>
+  </nav>
+</header>
+<main>
+  <h1>Neuer Eintrag</h1>
+  <p style="color:var(--grey-600);font-size:13px;">Pro Parameter ist nur ein Wert pro Tag möglich (Datum ohne Uhrzeit).</p>
+  <div id="addMsg" class="msg" style="display:none;"></div>
+  <div class="card" style="margin-bottom:26px;">
+    <div class="row">
+      <div class="field">
+        <label for="f_datum">Datum</label>
+        <input id="f_datum" type="date">
+      </div>
+      <div class="field">
+        <label for="f_param">Parameter</label>
+        <select id="f_param"></select>
+      </div>
+      <div class="field">
+        <label for="f_value">Wert</label>
+        <input id="f_value" type="number" step="any">
+      </div>
+    </div>
+    <div class="row">
+      <div class="field">
+        <label for="f_comment">Kommentar</label>
+        <input id="f_comment" type="text">
+      </div>
+      <div class="field">
+        <label for="f_source">Quelle</label>
+        <input id="f_source" type="text">
+      </div>
+    </div>
+    <button id="addBtn">Eintrag speichern</button>
+  </div>
+
+  <h1>Log</h1>
+  <div class="search-bar">
+    <input id="q" type="text" placeholder="Suche (Parameter, Kommentar, Quelle) …" style="flex:1;min-width:200px;">
+    <select id="filterParam"><option value="">Alle Parameter</option></select>
+    <button id="refreshBtn" class="secondary">Aktualisieren</button>
+  </div>
+  <div id="listMsg" class="msg" style="display:none;"></div>
+  <table>
+    <thead>
+      <tr><th>Datum</th><th>Parameter</th><th>Wert</th><th>Kommentar</th><th>Quelle</th><th>Erstellt</th><th></th></tr>
+    </thead>
+    <tbody id="rows"></tbody>
+  </table>
+  <div id="empty" class="empty" style="display:none;">Keine Einträge gefunden.</div>
+</main>
+
+<dialog id="editDialog">
+  <div class="card">
+    <h2>Eintrag bearbeiten</h2>
+    <input type="hidden" id="e_origDate">
+    <input type="hidden" id="e_origParam">
+    <div class="field"><label>Datum</label><input id="e_datum" type="date"></div>
+    <div class="field"><label>Parameter</label><select id="e_param"></select></div>
+    <div class="field"><label>Wert</label><input id="e_value" type="number" step="any"></div>
+    <div class="field"><label>Kommentar</label><input id="e_comment" type="text"></div>
+    <div class="field"><label>Quelle</label><input id="e_source" type="text"></div>
+    <div id="editMsg" class="msg" style="display:none;"></div>
+    <div class="actions">
+      <button class="secondary" id="cancelEdit">Abbrechen</button>
+      <button id="saveEdit">Speichern</button>
+    </div>
+  </div>
+</dialog>
+
+<script src="assets/db.js"></script>
+<script>
+const addMsg = document.getElementById('addMsg');
+const listMsg = document.getElementById('listMsg');
+let allParams = [];
+let allRows = [];
+
+async function loadParams(){
+  const client = getClient();
+  allParams = await queryCached(client, 'param:generic:all',
+    "SELECT ParameterID, Name, Einheit, Active FROM seestrasse52b_parameter WHERE ParaType = 'Generic' ORDER BY Name"
+  );
+  const activeOptions = allParams.filter(p => Number(p.Active) === 1)
+    .map(p => `<option value="${p.ParameterID}">${escapeHtml(p.Name)}${p.Einheit ? ' ('+escapeHtml(p.Einheit)+')' : ''}</option>`).join('');
+  document.getElementById('f_param').innerHTML = activeOptions;
+  document.getElementById('e_param').innerHTML = allParams
+    .map(p => `<option value="${p.ParameterID}">${escapeHtml(p.Name)}${p.Einheit ? ' ('+escapeHtml(p.Einheit)+')' : ''}</option>`).join('');
+  document.getElementById('filterParam').innerHTML = '<option value="">Alle Parameter</option>' +
+    allParams.map(p => `<option value="${p.ParameterID}">${escapeHtml(p.Name)}</option>`).join('');
+}
+
+function paramName(id){
+  const p = allParams.find(x => String(x.ParameterID) === String(id));
+  return p ? p.Name : '#' + id;
+}
+function paramUnit(id){
+  const p = allParams.find(x => String(x.ParameterID) === String(id));
+  return p ? (p.Einheit || '') : '';
+}
+
+async function loadRows(forceRefresh){
+  const client = getClient();
+  if(forceRefresh) cacheInvalidate('log:');
+  allRows = await queryCached(client, 'log:recent500',
+    'SELECT date, ParameterID, value, source, comments, created_at FROM seestrasse52b_values ORDER BY date DESC LIMIT 500'
+  );
+  render();
+}
+
+function render(){
+  const q = document.getElementById('q').value.trim().toLowerCase();
+  const fp = document.getElementById('filterParam').value;
+  const filtered = allRows.filter(r => {
+    if(fp && String(r.ParameterID) !== String(fp)) return false;
+    if(!q) return true;
+    const hay = [paramName(r.ParameterID), r.comments, r.source].join(' ').toLowerCase();
+    return hay.includes(q);
+  });
+  document.getElementById('empty').style.display = filtered.length ? 'none' : 'block';
+  document.getElementById('rows').innerHTML = filtered.map(r => `
+    <tr>
+      <td>${fmtDate(r.date)}</td>
+      <td>${escapeHtml(paramName(r.ParameterID))}</td>
+      <td class="num">${r.value === null ? '' : escapeHtml(r.value)} <span style="color:var(--grey-600);">${escapeHtml(paramUnit(r.ParameterID))}</span></td>
+      <td>${escapeHtml(r.comments)}</td>
+      <td>${escapeHtml(r.source)}</td>
+      <td class="mono" style="font-size:11px;color:var(--grey-600);">${fmtDateTime(r.created_at)}</td>
+      <td style="white-space:nowrap;">
+        <button class="small secondary" onclick="openEdit('${r.date}', ${r.ParameterID})">Bearbeiten</button>
+        <button class="small danger" onclick="deleteRow('${r.date}', ${r.ParameterID})">Löschen</button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+document.getElementById('q').addEventListener('input', render);
+document.getElementById('filterParam').addEventListener('change', render);
+document.getElementById('refreshBtn').addEventListener('click', () => loadRows(true));
+
+document.getElementById('addBtn').addEventListener('click', async () => {
+  const btn = document.getElementById('addBtn');
+  const datum = document.getElementById('f_datum').value;
+  const paramId = document.getElementById('f_param').value;
+  const value = document.getElementById('f_value').value;
+  const comment = document.getElementById('f_comment').value;
+  const source = document.getElementById('f_source').value;
+  if(!datum || !paramId){ showMsg(addMsg, 'Datum und Parameter sind erforderlich.', 'err'); return; }
+  btn.disabled = true;
+  try{
+    const client = getClient();
+    const dup = rowsToObjects(await client.execute(
+      'SELECT ParameterID FROM seestrasse52b_values WHERE date = ? AND ParameterID = ?', [datum, Number(paramId)]
+    ));
+    if(dup.length){
+      showMsg(addMsg, 'Für dieses Datum/Parameter existiert bereits ein Eintrag – kein Duplikat angelegt.', 'err');
+      return;
+    }
+    await client.execute(
+      'INSERT OR IGNORE INTO seestrasse52b_values (date, ParameterID, value, comments, source) VALUES (?, ?, ?, ?, ?)',
+      [datum, Number(paramId), value === '' ? null : Number(value), comment || null, source || null]
+    );
+    showMsg(addMsg, 'Eintrag gespeichert.', 'ok');
+    document.getElementById('f_value').value = '';
+    document.getElementById('f_comment').value = '';
+    document.getElementById('f_source').value = '';
+    cacheInvalidate('log:');
+    cacheInvalidate('index:');
+    await loadRows();
+  }catch(e){
+    showMsg(addMsg, 'Fehler: ' + e.message, 'err');
+  }finally{
+    btn.disabled = false;
+  }
+});
+
+const dialog = document.getElementById('editDialog');
+window.openEdit = function(date, paramId){
+  const r = allRows.find(x => x.date === date && Number(x.ParameterID) === Number(paramId));
+  if(!r) return;
+  document.getElementById('e_origDate').value = r.date;
+  document.getElementById('e_origParam').value = r.ParameterID;
+  document.getElementById('e_datum').value = r.date;
+  document.getElementById('e_param').value = r.ParameterID;
+  document.getElementById('e_value').value = r.value === null ? '' : r.value;
+  document.getElementById('e_comment').value = r.comments || '';
+  document.getElementById('e_source').value = r.source || '';
+  document.getElementById('editMsg').style.display = 'none';
+  dialog.showModal();
+};
+document.getElementById('cancelEdit').addEventListener('click', () => dialog.close());
+
+document.getElementById('saveEdit').addEventListener('click', async () => {
+  const editMsg = document.getElementById('editMsg');
+  const saveBtn = document.getElementById('saveEdit');
+  const origDate = document.getElementById('e_origDate').value;
+  const origParam = Number(document.getElementById('e_origParam').value);
+  const datum = document.getElementById('e_datum').value;
+  const paramId = Number(document.getElementById('e_param').value);
+  const value = document.getElementById('e_value').value;
+  const comment = document.getElementById('e_comment').value;
+  const source = document.getElementById('e_source').value;
+  saveBtn.disabled = true;
+  try{
+    const client = getClient();
+    if(datum !== origDate || paramId !== origParam){
+      const dup = rowsToObjects(await client.execute(
+        'SELECT ParameterID FROM seestrasse52b_values WHERE date = ? AND ParameterID = ?',
+        [datum, paramId]
+      ));
+      if(dup.length){
+        showMsg(editMsg, 'Für dieses Datum/Parameter existiert bereits ein anderer Eintrag – kein Duplikat gespeichert.', 'err');
+        return;
+      }
+    }
+    // Kein Autoincrement-Schlüssel: Ändert sich Datum oder Parameter, wird der alte
+    // Eintrag gelöscht und ein neuer mit dem neuen Schlüssel angelegt.
+    if(datum !== origDate || paramId !== origParam){
+      await client.execute('DELETE FROM seestrasse52b_values WHERE date = ? AND ParameterID = ?', [origDate, origParam]);
+      await client.execute(
+        'INSERT INTO seestrasse52b_values (date, ParameterID, value, comments, source) VALUES (?, ?, ?, ?, ?)',
+        [datum, paramId, value === '' ? null : Number(value), comment || null, source || null]
+      );
+    }else{
+      await client.execute(
+        'UPDATE seestrasse52b_values SET value=?, comments=?, source=?, modified_at=datetime(\'now\') WHERE date=? AND ParameterID=?',
+        [value === '' ? null : Number(value), comment || null, source || null, datum, paramId]
+      );
+    }
+    dialog.close();
+    cacheInvalidate('log:');
+    cacheInvalidate('index:');
+    await loadRows();
+  }catch(e){
+    showMsg(editMsg, 'Fehler: ' + e.message, 'err');
+  }finally{
+    saveBtn.disabled = false;
+  }
+});
+
+window.deleteRow = async function(date, paramId){
+  if(!confirm('Diesen Eintrag wirklich löschen?')) return;
+  try{
+    const client = getClient();
+    await client.execute('DELETE FROM seestrasse52b_values WHERE date=? AND ParameterID=?', [date, Number(paramId)]);
+    cacheInvalidate('log:');
+    cacheInvalidate('index:');
+    await loadRows();
+  }catch(e){
+    showMsg(listMsg, 'Fehler beim Löschen: ' + e.message, 'err');
+  }
+};
+
+(async () => {
+  try{
+    await loadParams();
+    await loadRows();
+  }catch(e){
+    showMsg(listMsg, 'Fehler beim Laden: ' + e.message, 'err');
+  }
+})();
+</script>
+</body>
+</html>

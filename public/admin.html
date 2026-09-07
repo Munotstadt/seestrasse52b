@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Seestrasse 52B · Admin</title>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">Seestrasse <span>52B</span></div>
+  <nav class="tabs">
+    <a href="index.html">Übersicht</a>
+    <a href="log.html">Log</a>
+    <a href="eve-data.html">Eve-Data</a>
+    <a href="uploader.html">Uploader</a>
+    <a href="admin.html" class="active">Admin</a>
+  </nav>
+</header>
+<main>
+  <h1>Parameter definieren</h1>
+  <div id="addMsg" class="msg" style="display:none;"></div>
+  <div class="card" style="margin-bottom:26px;">
+    <div class="row">
+      <div class="field">
+        <label for="n_group">Gruppe</label>
+        <input id="n_group" type="text" list="groupOptions" placeholder="z.B. Fahrzeug">
+        <datalist id="groupOptions"></datalist>
+      </div>
+      <div class="field">
+        <label for="n_name">Name</label>
+        <input id="n_name" type="text" placeholder="z.B. Wassertemperatur">
+      </div>
+      <div class="field">
+        <label for="n_unit">Einheit</label>
+        <input id="n_unit" type="text" placeholder="z.B. °C">
+      </div>
+    </div>
+    <button id="addBtn">Parameter anlegen</button>
+  </div>
+
+  <h1>Bestehende Parameter</h1>
+  <div id="listMsg" class="msg" style="display:none;"></div>
+  <table>
+    <thead><tr><th>ParameterID</th><th>Gruppe</th><th>Name</th><th>Einheit</th><th>Typ</th><th>Status</th><th>Einträge</th><th></th></tr></thead>
+    <tbody id="rows"></tbody>
+  </table>
+  <div id="empty" class="empty" style="display:none;">Noch keine Parameter angelegt.</div>
+  <button id="refreshBtn" class="secondary" style="margin-top:14px;">Aktualisieren</button>
+</main>
+
+<dialog id="editDialog">
+  <div class="card">
+    <h2>Parameter bearbeiten</h2>
+    <input type="hidden" id="e_id">
+    <div class="field"><label>Gruppe</label><input id="e_group" type="text" list="groupOptions"></div>
+    <div class="field"><label>Name</label><input id="e_name" type="text"></div>
+    <div class="field"><label>Einheit</label><input id="e_unit" type="text"></div>
+    <div class="field">
+      <label style="display:flex;align-items:center;gap:8px;">
+        <input type="checkbox" id="e_active" style="width:auto;"> Aktiv
+      </label>
+    </div>
+    <div id="editMsg" class="msg" style="display:none;"></div>
+    <div class="actions">
+      <button class="secondary" id="cancelEdit">Abbrechen</button>
+      <button id="saveEdit">Speichern</button>
+    </div>
+  </div>
+</dialog>
+
+<script src="assets/db.js"></script>
+<script>
+const addMsg = document.getElementById('addMsg');
+const listMsg = document.getElementById('listMsg');
+let params = [];
+let counts = {};
+
+async function load(forceRefresh){
+  const client = getClient();
+  if(forceRefresh) cacheInvalidate('param:');
+  params = await queryCached(client, 'param:all',
+    "SELECT ParameterID, ParaGroup, Name, Einheit, Active, ParaType FROM seestrasse52b_parameter ORDER BY ParaGroup, Name"
+  );
+  const cRows = await queryCached(client, 'log:counts_by_param',
+    'SELECT ParameterID, COUNT(*) AS cnt FROM seestrasse52b_values GROUP BY ParameterID'
+  );
+  counts = {};
+  cRows.forEach(r => { counts[r.ParameterID] = r.cnt; });
+  updateGroupOptions();
+  render();
+}
+
+function updateGroupOptions(){
+  const groups = [...new Set(params.map(p => p.ParaGroup).filter(Boolean))].sort();
+  document.getElementById('groupOptions').innerHTML = groups.map(g => `<option value="${escapeHtml(g)}"></option>`).join('');
+}
+
+function invalidateAfterParamChange(){
+  cacheInvalidate('param:');
+  cacheInvalidate('index:');
+  cacheInvalidate('log:');
+}
+
+function render(){
+  document.getElementById('empty').style.display = params.length ? 'none' : 'block';
+  document.getElementById('rows').innerHTML = params.map(p => `
+    <tr>
+      <td class="num">${p.ParameterID}</td>
+      <td>${escapeHtml(p.ParaGroup)}</td>
+      <td>${escapeHtml(p.Name)}</td>
+      <td>${escapeHtml(p.Einheit)}</td>
+      <td>${escapeHtml(p.ParaType)}</td>
+      <td><span class="badge ${Number(p.Active)===1 ? 'on':'off'}">${Number(p.Active)===1 ? 'Aktiv':'Inaktiv'}</span></td>
+      <td class="num">${counts[p.ParameterID] || 0}</td>
+      <td style="white-space:nowrap;">
+        <button class="small secondary" onclick="openEdit(${p.ParameterID})">Bearbeiten</button>
+        <button class="small danger" onclick="delParam(${p.ParameterID})">Löschen</button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+document.getElementById('addBtn').addEventListener('click', async () => {
+  const group = document.getElementById('n_group').value.trim();
+  const name = document.getElementById('n_name').value.trim();
+  const unit = document.getElementById('n_unit').value.trim();
+  if(!group){ showMsg(addMsg, 'Gruppe ist erforderlich.', 'err'); return; }
+  if(!name){ showMsg(addMsg, 'Name ist erforderlich.', 'err'); return; }
+  try{
+    const client = getClient();
+    await client.execute(
+      "INSERT INTO seestrasse52b_parameter (ParaGroup, Name, Einheit, Active, ParaType, table_field, table_name) VALUES (?, ?, ?, 1, 'Generic', 'parameterID', 'seestrasse52b_values')",
+      [group, name, unit || null]
+    );
+    showMsg(addMsg, 'Parameter angelegt.', 'ok');
+    document.getElementById('n_group').value = '';
+    document.getElementById('n_name').value = '';
+    document.getElementById('n_unit').value = '';
+    invalidateAfterParamChange();
+    await load();
+  }catch(e){
+    showMsg(addMsg, 'Fehler: ' + e.message, 'err');
+  }
+});
+
+const dialog = document.getElementById('editDialog');
+window.openEdit = function(id){
+  const p = params.find(x => String(x.ParameterID) === String(id));
+  if(!p) return;
+  document.getElementById('e_id').value = p.ParameterID;
+  document.getElementById('e_group').value = p.ParaGroup || '';
+  document.getElementById('e_name').value = p.Name;
+  document.getElementById('e_unit').value = p.Einheit || '';
+  document.getElementById('e_active').checked = Number(p.Active) === 1;
+  document.getElementById('editMsg').style.display = 'none';
+  dialog.showModal();
+};
+document.getElementById('cancelEdit').addEventListener('click', () => dialog.close());
+
+document.getElementById('saveEdit').addEventListener('click', async () => {
+  const editMsg = document.getElementById('editMsg');
+  const id = document.getElementById('e_id').value;
+  const group = document.getElementById('e_group').value.trim();
+  const name = document.getElementById('e_name').value.trim();
+  const unit = document.getElementById('e_unit').value.trim();
+  const active = document.getElementById('e_active').checked ? 1 : 0;
+  if(!group){ showMsg(editMsg, 'Gruppe ist erforderlich.', 'err'); return; }
+  if(!name){ showMsg(editMsg, 'Name ist erforderlich.', 'err'); return; }
+  try{
+    const client = getClient();
+    await client.execute('UPDATE seestrasse52b_parameter SET ParaGroup=?, Name=?, Einheit=?, Active=? WHERE ParameterID=?', [group, name, unit || null, active, Number(id)]);
+    dialog.close();
+    invalidateAfterParamChange();
+    await load();
+  }catch(e){
+    showMsg(editMsg, 'Fehler: ' + e.message, 'err');
+  }
+});
+
+window.delParam = async function(id){
+  const cnt = counts[id] || 0;
+  if(cnt > 0){
+    alert(`Dieser Parameter hat ${cnt} Log-Einträge und kann nicht gelöscht werden. Bitte stattdessen deaktivieren.`);
+    return;
+  }
+  if(!confirm('Diesen Parameter wirklich löschen?')) return;
+  try{
+    const client = getClient();
+    await client.execute('DELETE FROM seestrasse52b_parameter WHERE ParameterID=?', [Number(id)]);
+    invalidateAfterParamChange();
+    await load();
+  }catch(e){
+    showMsg(listMsg, 'Fehler beim Löschen: ' + e.message, 'err');
+  }
+};
+
+document.getElementById('refreshBtn').addEventListener('click', () => load(true));
+
+load().catch(e => showMsg(listMsg, 'Fehler beim Laden: ' + e.message, 'err'));
+</script>
+</body>
+</html>

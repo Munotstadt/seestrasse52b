@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Seestrasse 52B · Parameter</title>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">Seestrasse <span>52B</span></div>
+  <nav class="tabs">
+    <a href="index.html">Übersicht</a>
+    <a href="log.html">Log</a>
+    <a href="eve-data.html">Eve-Data</a>
+    <a href="uploader.html">Uploader</a>
+    <a href="admin.html">Admin</a>
+  </nav>
+</header>
+<main>
+  <div id="msg" class="msg" style="display:none;"></div>
+  <h1 id="title">Parameter</h1>
+  <div class="seg-group" id="chartModeGroup">
+    <button class="seg-btn active" data-mode="line">Linie</button>
+    <button class="seg-btn" data-mode="bar">Differenz (Balken)</button>
+  </div>
+  <div style="position:relative;">
+    <div id="chartWrap" class="card"></div>
+  </div>
+
+  <h1 style="margin-top:26px;">Log</h1>
+  <table>
+    <thead><tr><th>Datum</th><th>Wert</th><th>Kommentar</th><th>Quelle</th><th>Erstellt</th><th></th></tr></thead>
+    <tbody id="rows"></tbody>
+  </table>
+  <div id="empty" class="empty" style="display:none;">Keine Einträge für diesen Parameter.</div>
+</main>
+
+<dialog id="editDialog">
+  <div class="card">
+    <h2>Eintrag bearbeiten</h2>
+    <input type="hidden" id="e_origDate">
+    <div class="field"><label>Datum</label><input id="e_datum" type="date"></div>
+    <div class="field"><label>Wert</label><input id="e_value" type="number" step="any"></div>
+    <div class="field"><label>Kommentar</label><input id="e_comment" type="text"></div>
+    <div class="field"><label>Quelle</label><input id="e_source" type="text"></div>
+    <div id="editMsg" class="msg" style="display:none;"></div>
+    <div class="actions">
+      <button class="secondary" id="cancelEdit">Abbrechen</button>
+      <button id="saveEdit">Speichern</button>
+    </div>
+  </div>
+</dialog>
+
+<script src="assets/db.js"></script>
+<script>
+const msg = document.getElementById('msg');
+const qs = new URLSearchParams(location.search);
+const paramId = qs.get('id');
+let param = null;
+let rows = [];
+
+function drawChart(data){
+  const wrap = document.getElementById('chartWrap');
+  if(data.length === 0){
+    wrap.innerHTML = '<div class="empty">Keine Daten zum Zeichnen vorhanden.</div>';
+    return;
+  }
+  const w = wrap.clientWidth || 800, h = 280;
+  const padL = 50, padR = 16, padT = 16, padB = 30;
+  const xs = data.map(d => new Date(d.date).getTime());
+  const ys = data.map(d => Number(d.value));
+  const xMin = Math.min(...xs), xMax = Math.max(...xs);
+  const yMin = Math.min(...ys), yMax = Math.max(...ys);
+  const yPad = (yMax - yMin) * 0.1 || 1;
+  const yLo = yMin - yPad, yHi = yMax + yPad;
+
+  const xScale = x => padL + (xMax === xMin ? 0 : (x - xMin) / (xMax - xMin)) * (w - padL - padR);
+  const yScale = y => h - padB - (yHi === yLo ? 0 : (y - yLo) / (yHi - yLo)) * (h - padT - padB);
+
+  const pts = data.map(d => ({ x: xScale(new Date(d.date).getTime()), y: yScale(Number(d.value)), raw: d }));
+  const path = pts.map((p,i) => (i===0?'M':'L') + p.x.toFixed(1) + ',' + p.y.toFixed(1)).join(' ');
+
+  const gridLines = 4;
+  let gridSvg = '';
+  for(let i=0;i<=gridLines;i++){
+    const y = padT + i*(h-padT-padB)/gridLines;
+    const val = yHi - i*(yHi-yLo)/gridLines;
+    gridSvg += `<line x1="${padL}" y1="${y}" x2="${w-padR}" y2="${y}" stroke="var(--grey-300)" stroke-width="1"/>`;
+    gridSvg += `<text x="${padL-8}" y="${y+4}" text-anchor="end" font-size="10" font-family="IBM Plex Mono" fill="#666">${val.toFixed(1)}</text>`;
+  }
+
+  wrap.innerHTML = `
+    <svg class="chart" viewBox="0 0 ${w} ${h}" id="svgChart">
+      ${gridSvg}
+      <path d="${path}" fill="none" stroke="var(--red)" stroke-width="2"/>
+      <rect id="hitRect" x="${padL}" y="${padT}" width="${w-padL-padR}" height="${h-padT-padB}" fill="transparent"/>
+      <circle id="hoverDot" r="4" fill="var(--red)" style="display:none;"/>
+    </svg>
+  `;
+  const svg = document.getElementById('svgChart');
+  const hitRect = document.getElementById('hitRect');
+  const hoverDot = document.getElementById('hoverDot');
+  let tooltip = wrap.querySelector('.chart-tooltip');
+  if(!tooltip){
+    tooltip = document.createElement('div');
+    tooltip.className = 'chart-tooltip';
+    tooltip.style.display = 'none';
+    wrap.style.position = 'relative';
+    wrap.appendChild(tooltip);
+  }
+
+  function nearest(mx){
+    let best = pts[0], bestDist = Infinity;
+    for(const p of pts){
+      const d = Math.abs(p.x - mx);
+      if(d < bestDist){ bestDist = d; best = p; }
+    }
+    return best;
+  }
+
+  hitRect.addEventListener('mousemove', (ev) => {
+    const rect = svg.getBoundingClientRect();
+    const mx = (ev.clientX - rect.left) * (w / rect.width);
+    const p = nearest(mx);
+    hoverDot.style.display = 'block';
+    hoverDot.setAttribute('cx', p.x); hoverDot.setAttribute('cy', p.y);
+    tooltip.style.display = 'block';
+    tooltip.style.left = ((p.x/w)*rect.width) + 'px';
+    tooltip.style.top = ((p.y/h)*rect.height) + 'px';
+    tooltip.textContent = `${fmtDate(p.raw.date)} · ${p.raw.value}${param.Einheit ? ' '+param.Einheit : ''}`;
+  });
+  hitRect.addEventListener('mouseleave', () => {
+    hoverDot.style.display = 'none';
+    tooltip.style.display = 'none';
+  });
+  hitRect.addEventListener('touchmove', (ev) => {
+    const t = ev.touches[0];
+    const rect = svg.getBoundingClientRect();
+    const mx = (t.clientX - rect.left) * (w / rect.width);
+    const p = nearest(mx);
+    hoverDot.style.display = 'block';
+    hoverDot.setAttribute('cx', p.x); hoverDot.setAttribute('cy', p.y);
+    tooltip.style.display = 'block';
+    tooltip.style.left = ((p.x/w)*rect.width) + 'px';
+    tooltip.style.top = ((p.y/h)*rect.height) + 'px';
+    tooltip.textContent = `${fmtDate(p.raw.date)} · ${p.raw.value}${param.Einheit ? ' '+param.Einheit : ''}`;
+    ev.preventDefault();
+  }, { passive:false });
+}
+
+function renderRows(){
+  document.getElementById('empty').style.display = rows.length ? 'none' : 'block';
+  document.getElementById('rows').innerHTML = rows.map(r => `
+    <tr>
+      <td>${fmtDate(r.date)}</td>
+      <td class="num">${r.value === null ? '' : escapeHtml(r.value)} <span style="color:var(--grey-600);">${escapeHtml(param.Einheit||'')}</span></td>
+      <td>${escapeHtml(r.comments)}</td>
+      <td>${escapeHtml(r.source)}</td>
+      <td class="mono" style="font-size:11px;color:var(--grey-600);">${fmtDateTime(r.created_at)}</td>
+      <td style="white-space:nowrap;">
+        <button class="small secondary" onclick="openEdit('${r.date}')">Bearbeiten</button>
+        <button class="small danger" onclick="deleteRow('${r.date}')">Löschen</button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function toDiffSeries(dataAsc){
+  const diffs = [];
+  for(let i = 1; i < dataAsc.length; i++){
+    diffs.push({ date: dataAsc[i].date, value: Math.round((dataAsc[i].value - dataAsc[i-1].value) * 100) / 100 });
+  }
+  return diffs;
+}
+
+function drawBarChart(data){
+  const wrap = document.getElementById('chartWrap');
+  if(data.length === 0){
+    wrap.innerHTML = '<div class="empty">Zu wenig Datenpunkte für eine Differenzdarstellung (mind. 2 Werte nötig).</div>';
+    return;
+  }
+  const w = wrap.clientWidth || 800, h = 280;
+  const padL = 50, padR = 16, padT = 16, padB = 30;
+  const yMin = Math.min(0, ...data.map(d => d.value));
+  const yMax = Math.max(0, ...data.map(d => d.value));
+  const yPad = (yMax - yMin) * 0.1 || 1;
+  const yLo = yMin - yPad, yHi = yMax + yPad;
+
+  const yScale = y => h - padB - (yHi === yLo ? 0 : (y - yLo) / (yHi - yLo)) * (h - padT - padB);
+  const zeroY = yScale(0);
+  const innerW = w - padL - padR;
+  const n = data.length;
+  const gap = innerW / n * 0.25;
+  const barW = innerW / n - gap;
+
+  const gridLines = 4;
+  let gridSvg = '';
+  for(let i=0;i<=gridLines;i++){
+    const y = padT + i*(h-padT-padB)/gridLines;
+    const val = yHi - i*(yHi-yLo)/gridLines;
+    gridSvg += `<line x1="${padL}" y1="${y}" x2="${w-padR}" y2="${y}" stroke="var(--grey-300)" stroke-width="1"/>`;
+    gridSvg += `<text x="${padL-8}" y="${y+4}" text-anchor="end" font-size="10" font-family="IBM Plex Mono" fill="#666">${val.toFixed(1)}</text>`;
+  }
+
+  let barsSvg = '';
+  const bars = [];
+  data.forEach((d, i) => {
+    const x = padL + i * (innerW / n) + gap / 2;
+    const y = yScale(Math.max(0, d.value));
+    const barH = Math.abs(yScale(d.value) - zeroY);
+    bars.push({ x, y: Math.min(y, zeroY), w: barW, h: Math.max(barH, 1), raw: d });
+    barsSvg += `<rect x="${x.toFixed(1)}" y="${Math.min(y, zeroY).toFixed(1)}" width="${barW.toFixed(1)}" height="${Math.max(barH,1).toFixed(1)}" fill="var(--red)" rx="2"/>`;
+  });
+
+  const labelStep = Math.max(1, Math.ceil(n / 10));
+  let xLabelsSvg = '';
+  data.forEach((d, i) => {
+    if(i % labelStep !== 0) return;
+    const x = padL + i * (innerW / n) + (innerW / n) / 2;
+    const dt = new Date(d.date);
+    const label = `${String(dt.getMonth()+1).padStart(2,'0')}/${String(dt.getFullYear()).slice(-2)}`;
+    xLabelsSvg += `<text x="${x}" y="${h-padB+16}" text-anchor="middle" font-size="10" font-family="IBM Plex Mono" fill="#666">${label}</text>`;
+  });
+
+  wrap.innerHTML = `
+    <svg class="chart" viewBox="0 0 ${w} ${h}" id="svgChart">
+      ${gridSvg}
+      <line x1="${padL}" y1="${zeroY}" x2="${w-padR}" y2="${zeroY}" stroke="var(--ink)" stroke-width="1"/>
+      ${barsSvg}
+      ${xLabelsSvg}
+    </svg>
+  `;
+  const svg = document.getElementById('svgChart');
+  const tooltip = document.createElement('div');
+  tooltip.className = 'chart-tooltip';
+  tooltip.style.display = 'none';
+  wrap.style.position = 'relative';
+  wrap.appendChild(tooltip);
+
+  function nearestBar(mx){
+    let best = bars[0], bestDist = Infinity;
+    for(const b of bars){
+      const cx = b.x + b.w/2;
+      const d = Math.abs(cx - mx);
+      if(d < bestDist){ bestDist = d; best = b; }
+    }
+    return best;
+  }
+  function handleMove(clientX, clientY, rect){
+    const mx = (clientX - rect.left) * (w / rect.width);
+    const b = nearestBar(mx);
+    tooltip.style.display = 'block';
+    tooltip.style.left = ((b.x + b.w/2)/w * rect.width) + 'px';
+    tooltip.style.top = (b.y/h * rect.height) + 'px';
+    tooltip.textContent = `${fmtDate(b.raw.date)} · ${b.raw.value > 0 ? '+' : ''}${b.raw.value}${param.Einheit ? ' '+param.Einheit : ''}`;
+  }
+  svg.addEventListener('mousemove', (ev) => handleMove(ev.clientX, ev.clientY, svg.getBoundingClientRect()));
+  svg.addEventListener('mouseleave', () => { tooltip.style.display = 'none'; });
+  svg.addEventListener('touchmove', (ev) => {
+    const t = ev.touches[0];
+    handleMove(t.clientX, t.clientY, svg.getBoundingClientRect());
+    ev.preventDefault();
+  }, { passive:false });
+}
+
+let chartMode = 'line';
+
+function renderChart(){
+  const dataAsc = rows.filter(r => r.value !== null).slice().reverse(); // rows ist neueste-zuerst
+  if(chartMode === 'bar'){
+    drawBarChart(toDiffSeries(dataAsc));
+  }else{
+    drawChart(dataAsc);
+  }
+}
+
+document.getElementById('chartModeGroup').addEventListener('click', (ev) => {
+  const btn = ev.target.closest('.seg-btn');
+  if(!btn) return;
+  document.querySelectorAll('#chartModeGroup .seg-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  chartMode = btn.dataset.mode;
+  renderChart();
+});
+
+async function load(forceRefresh){
+  if(!paramId){ showMsg(msg, 'Kein Parameter angegeben.', 'err'); return; }
+  const client = getClient();
+  if(forceRefresh) cacheInvalidate('log:by_param:' + paramId);
+
+  const pObjs = await queryCached(client, 'param:by_id:' + paramId,
+    'SELECT ParameterID, Name, Einheit FROM seestrasse52b_parameter WHERE ParameterID = ?', [Number(paramId)]
+  );
+  if(pObjs.length === 0){ showMsg(msg, 'Parameter nicht gefunden.', 'err'); return; }
+  param = pObjs[0];
+  document.title = 'Seestrasse 52B · ' + param.Name;
+  document.getElementById('title').textContent = param.Name + (param.Einheit ? ' (' + param.Einheit + ')' : '');
+
+  rows = await queryCached(client, 'log:by_param:' + paramId,
+    'SELECT date, value, comments, source, created_at FROM seestrasse52b_values WHERE ParameterID = ? ORDER BY date ASC', [Number(paramId)]
+  );
+  rows = rows.slice().reverse(); // neueste zuerst in Tabelle
+  renderRows();
+  renderChart();
+}
+
+const dialog = document.getElementById('editDialog');
+window.openEdit = function(date){
+  const r = rows.find(x => x.date === date);
+  if(!r) return;
+  document.getElementById('e_origDate').value = r.date;
+  document.getElementById('e_datum').value = r.date;
+  document.getElementById('e_value').value = r.value === null ? '' : r.value;
+  document.getElementById('e_comment').value = r.comments || '';
+  document.getElementById('e_source').value = r.source || '';
+  document.getElementById('editMsg').style.display = 'none';
+  dialog.showModal();
+};
+document.getElementById('cancelEdit').addEventListener('click', () => dialog.close());
+
+document.getElementById('saveEdit').addEventListener('click', async () => {
+  const editMsg = document.getElementById('editMsg');
+  const saveBtn = document.getElementById('saveEdit');
+  const origDate = document.getElementById('e_origDate').value;
+  const datum = document.getElementById('e_datum').value;
+  const value = document.getElementById('e_value').value;
+  const comment = document.getElementById('e_comment').value;
+  const source = document.getElementById('e_source').value;
+  saveBtn.disabled = true;
+  try{
+    const client = getClient();
+    if(datum !== origDate){
+      const dup = rowsToObjects(await client.execute(
+        'SELECT ParameterID FROM seestrasse52b_values WHERE date = ? AND ParameterID = ?',
+        [datum, Number(paramId)]
+      ));
+      if(dup.length){
+        showMsg(editMsg, 'Für dieses Datum existiert bereits ein anderer Eintrag – kein Duplikat gespeichert.', 'err');
+        return;
+      }
+      await client.execute('DELETE FROM seestrasse52b_values WHERE date = ? AND ParameterID = ?', [origDate, Number(paramId)]);
+      await client.execute(
+        'INSERT INTO seestrasse52b_values (date, ParameterID, value, comments, source) VALUES (?, ?, ?, ?, ?)',
+        [datum, Number(paramId), value === '' ? null : Number(value), comment || null, source || null]
+      );
+    }else{
+      await client.execute(
+        'UPDATE seestrasse52b_values SET value=?, comments=?, source=?, modified_at=datetime(\'now\') WHERE date=? AND ParameterID=?',
+        [value === '' ? null : Number(value), comment || null, source || null, datum, Number(paramId)]
+      );
+    }
+    dialog.close();
+    cacheInvalidate('log:');
+    cacheInvalidate('index:');
+    await load(true);
+  }catch(e){
+    showMsg(editMsg, 'Fehler: ' + e.message, 'err');
+  }finally{
+    saveBtn.disabled = false;
+  }
+});
+
+window.deleteRow = async function(date){
+  if(!confirm('Diesen Eintrag wirklich löschen?')) return;
+  try{
+    const client = getClient();
+    await client.execute('DELETE FROM seestrasse52b_values WHERE date=? AND ParameterID=?', [date, Number(paramId)]);
+    cacheInvalidate('log:');
+    cacheInvalidate('index:');
+    await load(true);
+  }catch(e){
+    showMsg(msg, 'Fehler beim Löschen: ' + e.message, 'err');
+  }
+};
+
+load().catch(e => showMsg(msg, 'Fehler beim Laden: ' + e.message, 'err'));
+window.addEventListener('resize', () => { if(param) renderChart(); });
+</script>
+</body>
+</html>

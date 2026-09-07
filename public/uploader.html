@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Seestrasse 52B · Uploader</title>
+<link rel="stylesheet" href="assets/style.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+  .tabs2 { display: flex; gap: 4px; border-bottom: 1px solid var(--grey-300); margin: 18px 0 20px; }
+  .tab2 {
+    padding: 9px 14px; font-size: 13px; font-weight: 600; cursor: pointer;
+    color: var(--grey-600); border-bottom: 2px solid transparent; user-select: none;
+    font-family: 'Space Grotesk', sans-serif;
+  }
+  .tab2.active { color: var(--red); border-bottom-color: var(--red); }
+  .tab2:hover:not(.active) { color: var(--ink); }
+  .panel2 { display: none; }
+  .panel2.active { display: block; }
+  .dropzone {
+    border: 2px dashed var(--grey-300); border-radius: var(--radius);
+    padding: 30px 16px; text-align: center; cursor: pointer;
+    transition: border-color .15s, background .15s;
+  }
+  .dropzone.drag { border-color: var(--red); background: var(--grey-100); }
+  .dropzone p { margin: 0; color: var(--grey-600); font-size: 14px; }
+  .dropzone strong { color: var(--ink); }
+  input[type=file] { display: none; }
+  .filename { font-family: 'IBM Plex Mono', monospace; font-size: 13px; margin-top: 10px; }
+  .stats { display: flex; gap: 24px; flex-wrap: wrap; margin: 4px 0 0; font-size: 13px; }
+  .stats div b { display: block; font-size: 20px; font-weight: 600; font-family: 'Space Grotesk', sans-serif; }
+  .stats .ok b { color: #1e7a34; }
+  .stats .err b { color: var(--red); }
+  .tablewrap { max-height: 320px; overflow-y: auto; border: 1px solid var(--grey-300); border-radius: var(--radius); margin-top: 12px; }
+  .tablewrap table { margin: 0; }
+  .row-dupe { background: #fff8e1; }
+  .actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 16px; align-items: center; }
+  .assumption {
+    font-size: 12px; background: #fff8e1; border: 1px solid #f0dfa0; border-radius: var(--radius);
+    padding: 8px 10px; margin-bottom: 14px; color: #6b5300;
+  }
+  .field-inline { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+  .field-inline > .field { flex: 1; min-width: 150px; margin-bottom: 0; }
+  .import-progress { font-size: 13px; color: var(--grey-600); margin-top: 8px; }
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">Seestrasse <span>52B</span></div>
+  <nav class="tabs">
+    <a href="index.html">Übersicht</a>
+    <a href="log.html">Log</a>
+    <a href="eve-data.html">Eve-Data</a>
+    <a href="uploader.html" class="active">Uploader</a>
+    <a href="admin.html">Admin</a>
+  </nav>
+</header>
+<main>
+  <h1>Uploader</h1>
+  <p style="color:var(--grey-600);font-size:13px;">Manueller Upload, Eve-Upload und Skoda-Upload an einem Ort.</p>
+  <div class="assumption">Hinweis: Pro Parameter ist nur ein Wert pro Tag speicherbar. Bei mehreren Skoda-Fahrten am selben Tag zählt der zuletzt importierte Wert dieses Tages (Uhrzeit/Adresse landet im Kommentarfeld).</div>
+
+  <div class="tabs2">
+    <div class="tab2 active" data-tab="manual">Manueller Upload</div>
+    <div class="tab2" data-tab="eve">Eve Upload</div>
+    <div class="tab2" data-tab="skoda">Skoda Upload</div>
+  </div>
+
+  <!-- ============ MANUELLER UPLOAD ============ -->
+  <div class="panel2 active" id="panel-manual">
+    <div class="card" style="margin-bottom:20px;">
+      <h2 style="font-size:15px;">Parameter wählen</h2>
+      <div class="field-inline">
+        <div class="field">
+          <label for="paraGroup">Parameter-Typ</label>
+          <select id="paraGroup"></select>
+        </div>
+        <div class="field">
+          <label for="paraSelect">Parameter</label>
+          <select id="paraSelect"></select>
+        </div>
+      </div>
+      <div class="field-inline">
+        <div class="field">
+          <label for="manDate">Datum</label>
+          <input type="date" id="manDate">
+        </div>
+        <div class="field">
+          <label for="manValue">Value</label>
+          <input type="number" step="any" id="manValue">
+        </div>
+      </div>
+      <div class="field">
+        <label for="manComment">Comment</label>
+        <input type="text" id="manComment" placeholder="optional">
+      </div>
+      <button id="btnManualAdd">Zur Liste hinzufügen</button>
+    </div>
+
+    <div class="card">
+      <h2 style="font-size:15px;">Zu importierende Einträge</h2>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>Datum</th><th>ParameterID</th><th>Value</th><th>Comment</th><th>Source</th><th></th></tr></thead>
+          <tbody id="manualBody"></tbody>
+        </table>
+      </div>
+      <div class="actions">
+        <button id="btnManualUpload" disabled>Importieren</button>
+      </div>
+      <div id="manualMsg" class="msg" style="display:none;margin-top:10px;"></div>
+    </div>
+  </div>
+
+  <!-- ============ EVE UPLOAD ============ -->
+  <div class="panel2" id="panel-eve">
+    <div class="card" style="margin-bottom:20px;">
+      <h2 style="font-size:15px;">Eve Weather · Upload</h2>
+      <p style="color:var(--grey-600);font-size:13px;">
+        Eve-Export-Dateien (.xlsx) auswählen — Temperatur- und Luftfeuchtigkeit-Dateien können gemischt
+        und für mehrere Räume gleichzeitig hochgeladen werden. Pro Tag wird der Durchschnitt berechnet;
+        Tage mit weniger als <span id="minRowsLabel" class="mono"></span> Messungen werden übersprungen.
+        Ein erneuter Upload überschreibt bereits vorhandene Tage automatisch (kein Duplikat).
+      </p>
+      <div class="field">
+        <label for="eveFileInput">Eve-Export-Dateien (.xlsx)</label>
+        <input id="eveFileInput" type="file" accept=".xlsx" multiple>
+      </div>
+      <button id="eveUploadBtn">Hochladen &amp; verarbeiten</button>
+      <div id="eveUploadMsg" class="msg" style="display:none;margin-top:12px;"></div>
+      <div id="eveUploadResults" style="margin-top:14px;"></div>
+    </div>
+  </div>
+
+  <!-- ============ SKODA UPLOAD ============ -->
+  <div class="panel2" id="panel-skoda">
+    <div class="card" style="margin-bottom:20px;">
+      <h2 style="font-size:15px;">Datei wählen</h2>
+      <div class="dropzone" id="skodaDropzone">
+        <p><strong>CSV-Datei hierher ziehen</strong> oder klicken zum Auswählen</p>
+        <p style="margin-top:6px;font-size:12px;">Erwartet: Skoda Connect Trip-Export (Spalten "End of trip", "End address", "End odometer in km", "End SoC in %")</p>
+        <div class="filename" id="skodaFilename"></div>
+      </div>
+      <input type="file" id="skodaFileInput" accept=".csv">
+    </div>
+
+    <div class="card" id="skodaResultCard" style="display:none;">
+      <h2 style="font-size:15px;">Prüfung</h2>
+      <div class="stats">
+        <div><span>Fahrten in Datei</span><b id="skodaStTrips">0</b></div>
+        <div class="ok"><span>Log-Einträge (gültig)</span><b id="skodaStValid">0</b></div>
+        <div class="err"><span>Duplikate (Datum+Parameter)</span><b id="skodaStDupes">0</b></div>
+        <div class="err"><span>Fehlerhafte Zeilen</span><b id="skodaStInvalid">0</b></div>
+      </div>
+      <div id="skodaErrorSection" style="display:none;"><div class="msg err" id="skodaErrList" style="margin-top:12px;"></div></div>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>Datum</th><th>ParameterID</th><th>Value</th><th>Comment</th><th>Source</th></tr></thead>
+          <tbody id="skodaPreviewBody"></tbody>
+        </table>
+      </div>
+      <p style="font-size:12px;color:var(--grey-600);margin-top:8px;">Zeilen mit gleichem Datum(Tag)+ParameterID innerhalb der Datei sind gelb markiert; nur der letzte Eintrag pro Tag/Parameter wird importiert. Beim Import gegen die bestehende DB überschreibt ein Duplikat (UNIQUE Datum+ParameterID) den bisherigen Tageswert.</p>
+      <div class="actions">
+        <button id="btnSkodaUpload" disabled>Importieren</button>
+      </div>
+      <div id="skodaMsg" class="msg" style="display:none;margin-top:10px;"></div>
+      <div class="import-progress" id="skodaProgress"></div>
+    </div>
+  </div>
+</main>
+
+<script src="assets/db.js"></script>
+<script>
+/* ===================== SHARED CONFIG =====================
+   PARAM_KM/PARAM_SOC entsprechen den bestehenden, produktiven ParameterIDs
+   in seestrasse52b_parameter ("Auto Skoda (Kilometerstand)" / "Auto SoC"). */
+const PARAM_KM = 13;
+const PARAM_SOC = 14;
+
+function findDupeKeySet(entries) {
+  const seen = new Map();
+  entries.forEach(e => {
+    const key = e.Datum + '|' + e.ParameterID;
+    seen.set(key, (seen.get(key)||0) + 1);
+  });
+  return new Set([...seen.entries()].filter(([,c]) => c>1).map(([k]) => k));
+}
+
+// Führt Upserts sequentiell aus (INSERT OR REPLACE — pro Tag/Parameter ist nur ein Wert
+// speicherbar; bei mehreren Zeilen desselben Tages gewinnt die zuletzt importierte).
+async function importEntries(entries, progressEl) {
+  const client = getClient();
+  let ok = 0, failed = 0;
+  const failures = [];
+  for (let i = 0; i < entries.length; i++) {
+    const e = entries[i];
+    if (progressEl) progressEl.textContent = `Importiere ${i+1}/${entries.length} …`;
+    try {
+      await client.execute(
+        `INSERT INTO seestrasse52b_values (date, ParameterID, value, comments, source)
+         VALUES (?, ?, ?, ?, ?)
+         ON CONFLICT(date, ParameterID)
+         DO UPDATE SET value = excluded.value, comments = excluded.comments, source = excluded.source, modified_at = datetime('now')`,
+        [e.Datum, e.ParameterID, e.Value, e.Comment || null, e.Source]
+      );
+      ok++;
+    } catch (err) {
+      failed++;
+      failures.push(`${e.Datum} / ParameterID ${e.ParameterID}: ${err.message}`);
+    }
+  }
+  if (progressEl) progressEl.textContent = '';
+  return { ok, failed, failures };
+}
+
+function renderImportResult(msgEl, result) {
+  if (result.failed === 0) {
+    showMsg(msgEl, `✓ ${result.ok} Einträge importiert.`, 'ok');
+  } else {
+    const detail = result.failures.slice(0, 8).join('\n') + (result.failures.length > 8 ? `\n… und ${result.failures.length - 8} weitere` : '');
+    showMsg(msgEl, `${result.ok} Einträge importiert, ${result.failed} fehlgeschlagen:\n${detail}`, result.ok > 0 ? 'ok' : 'err');
+    msgEl.style.whiteSpace = 'pre-line';
+  }
+}
+
+/* ===================== TABS ===================== */
+document.querySelectorAll('.tab2').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.tab2').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.panel2').forEach(p => p.classList.remove('active'));
+    tab.classList.add('active');
+    document.getElementById('panel-' + tab.dataset.tab).classList.add('active');
+  });
+});
+
+/* ===================== MANUELLER UPLOAD ===================== */
+const manualGroupSel = document.getElementById('paraGroup');
+const manualParamSel = document.getElementById('paraSelect');
+let manualEntries = [];
+let allParams = [];
+
+async function loadParamOptions() {
+  try {
+    const client = getClient();
+    allParams = await queryCached(client, 'param:all_for_upload',
+      "SELECT ParameterID, Name, Einheit, ParaGroup FROM seestrasse52b_parameter WHERE Active = 1 ORDER BY ParaGroup, Name"
+    );
+  } catch (e) {
+    showMsg(document.getElementById('manualMsg'), 'Parameter konnten nicht geladen werden: ' + e.message, 'err');
+    return;
+  }
+  const groups = [...new Set(allParams.map(p => p.ParaGroup))];
+  manualGroupSel.innerHTML = groups.map(g => `<option value="${escapeHtml(g)}">${escapeHtml(g)}</option>`).join('');
+  renderParamOptions(groups[0]);
+}
+
+function renderParamOptions(group) {
+  const list = allParams.filter(p => p.ParaGroup === group);
+  manualParamSel.innerHTML = list.map(p =>
+    `<option value="${p.ParameterID}">${escapeHtml(p.Name)}${p.Einheit ? ' (' + escapeHtml(p.Einheit) + ')' : ''} — ID ${p.ParameterID}</option>`
+  ).join('');
+}
+manualGroupSel.addEventListener('change', () => renderParamOptions(manualGroupSel.value));
+loadParamOptions();
+
+function renderManualTable() {
+  const dupeKeys = findDupeKeySet(manualEntries);
+  const tbody = document.getElementById('manualBody');
+  tbody.innerHTML = manualEntries.map((e, i) => `
+    <tr class="${dupeKeys.has(e.Datum+'|'+e.ParameterID) ? 'row-dupe' : ''}">
+      <td class="num">${e.Datum}</td>
+      <td class="num">${e.ParameterID}</td>
+      <td class="num">${e.Value}</td>
+      <td>${escapeHtml(e.Comment||'')}</td>
+      <td><span class="badge off">${e.Source}</span></td>
+      <td><button class="small secondary" onclick="removeManual(${i})">Entfernen</button></td>
+    </tr>`).join('');
+  const anyValid = manualEntries.some(e => !dupeKeys.has(e.Datum+'|'+e.ParameterID));
+  document.getElementById('btnManualUpload').disabled = !anyValid;
+}
+window.removeManual = function(i) { manualEntries.splice(i,1); renderManualTable(); };
+
+document.getElementById('btnManualAdd').addEventListener('click', () => {
+  const date = document.getElementById('manDate').value;
+  const value = document.getElementById('manValue').value;
+  const comment = document.getElementById('manComment').value;
+  const paramId = Number(manualParamSel.value);
+
+  if (!date || value === '' || isNaN(Number(value)) || !paramId) {
+    showMsg(document.getElementById('manualMsg'), 'Bitte Datum, Parameter und einen gültigen Value angeben.', 'err');
+    return;
+  }
+  manualEntries.push({
+    Datum: date,
+    ParameterID: paramId,
+    Value: Number(value),
+    Comment: comment,
+    Source: 'Manual'
+  });
+  document.getElementById('manualMsg').style.display = 'none';
+  renderManualTable();
+});
+
+document.getElementById('btnManualUpload').addEventListener('click', async () => {
+  const dupeKeys = findDupeKeySet(manualEntries);
+  const valid = manualEntries.filter(e => !dupeKeys.has(e.Datum+'|'+e.ParameterID));
+  const btn = document.getElementById('btnManualUpload');
+  btn.disabled = true;
+  const result = await importEntries(valid, null);
+  renderImportResult(document.getElementById('manualMsg'), result);
+  cacheInvalidate('log:');
+  cacheInvalidate('index:');
+  if (result.ok > 0) {
+    manualEntries = manualEntries.filter(e => dupeKeys.has(e.Datum+'|'+e.ParameterID));
+    renderManualTable();
+  } else {
+    btn.disabled = false;
+  }
+});
+
+/* ===================== EVE UPLOAD (1:1 aus eve-data.html) ===================== */
+const MIN_ROWS_PER_DAY = 115;
+document.getElementById('minRowsLabel').textContent = MIN_ROWS_PER_DAY;
+
+function parseEveWorkbook(arrayBuffer, fileName){
+  const wb = XLSX.read(arrayBuffer, { type: 'array', cellDates: true });
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  const rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: null });
+
+  const raumLine = String(rows[1]?.[0] || '');
+  const raum = raumLine.replace(/^Raum:\s*/i, '').trim();
+  if(!raum) throw new Error(`${fileName}: Raum-Zeile nicht gefunden (Zeile 2 erwartet "Raum: ...").`);
+
+  const headerLine = String(rows[3]?.[1] || '');
+  let valueType, unit, label, suffix;
+  if(/Celsius/i.test(headerLine)){
+    valueType = 'C'; unit = '°C'; label = 'Temperatur (°C)'; suffix = '(Temp)';
+  }else if(/Luftfeuchtigkeit/i.test(headerLine)){
+    valueType = 'RelLuft'; unit = '%'; label = 'Luftfeuchtigkeit (%)'; suffix = '(Luftf.)';
+  }else{
+    throw new Error(`${fileName}: unbekannte Spalte "${headerLine}" (erwartet Temperatur/Celsius oder Luftfeuchtigkeit).`);
+  }
+
+  const byDay = {};
+  for(let i = 4; i < rows.length; i++){
+    const r = rows[i];
+    if(!r || r[0] == null || r[1] == null) continue;
+    const d = r[0] instanceof Date ? r[0] : new Date(r[0]);
+    if(isNaN(d)) continue;
+    const dayKey = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    (byDay[dayKey] = byDay[dayKey] || []).push(Number(r[1]));
+  }
+
+  const dailyAverages = [];
+  let skipped = 0;
+  for(const [day, vals] of Object.entries(byDay)){
+    if(vals.length < MIN_ROWS_PER_DAY){ skipped++; continue; }
+    const avg = vals.reduce((a,b) => a+b, 0) / vals.length;
+    dailyAverages.push({ day, value: Math.round(avg * 100) / 100, count: vals.length });
+  }
+  dailyAverages.sort((a,b) => a.day.localeCompare(b.day));
+
+  return { raum, valueType, unit, label, suffix, dailyAverages, totalDays: Object.keys(byDay).length, skippedDays: skipped };
+}
+
+/* ---------- DB Helpers ---------- */
+
+async function ensureRoomParameter(client, cache, roomName, unit, suffix){
+  const cacheKey = roomName.trim().toLowerCase() + '|' + suffix;
+  if(cache[cacheKey]) return cache[cacheKey];
+
+  const existing = rowsToObjects(await client.execute(
+    "SELECT ParameterID FROM seestrasse52b_parameter WHERE ParaGroup = 'Eve Räume' AND LOWER(TRIM(Label)) = ? AND Name LIKE ?",
+    [roomName.trim().toLowerCase(), `%${suffix}`]
+  ));
+  if(existing.length){
+    cache[cacheKey] = existing[0].ParameterID;
+    return cache[cacheKey];
+  }
+
+  const name = `${roomName} ${suffix}`;
+  const res = await client.execute(
+    "INSERT INTO seestrasse52b_parameter (Name, Einheit, Active, ParaType, Label, ParaGroup, table_field, table_name) VALUES (?, ?, 1, 'Sensor', ?, 'Eve Räume', 'parameterID', 'seestrasse52b_values')",
+    [name, unit, roomName]
+  );
+  const newId = res.meta?.last_row_id;
+  cache[cacheKey] = newId;
+  return newId;
+}
+
+async function uploadDailyAverages(client, parameterId, dailyAverages, source){
+  for(const d of dailyAverages){
+    await client.execute(
+      `INSERT INTO seestrasse52b_values (date, ParameterID, value, source)
+       VALUES (?, ?, ?, ?)
+       ON CONFLICT(date, ParameterID)
+       DO UPDATE SET value = excluded.value, source = excluded.source, modified_at = datetime('now')`,
+      [d.day, parameterId, d.value, source]
+    );
+  }
+}
+
+document.getElementById('eveUploadBtn').addEventListener('click', async () => {
+  const files = document.getElementById('eveFileInput').files;
+  const uploadMsg = document.getElementById('eveUploadMsg');
+  const uploadResults = document.getElementById('eveUploadResults');
+  if(!files || files.length === 0){ showMsg(uploadMsg, 'Bitte mindestens eine Datei auswählen.', 'err'); return; }
+
+  uploadResults.innerHTML = '';
+  showMsg(uploadMsg, `Verarbeite ${files.length} Datei(en) …`, 'ok');
+
+  try{
+    const client = getClient();
+    const paramCache = {};
+    const summaries = [];
+
+    for(const file of files){
+      const buf = await file.arrayBuffer();
+      let parsed;
+      try{
+        parsed = parseEveWorkbook(buf, file.name);
+      }catch(e){
+        summaries.push(`<div class="msg err">${escapeHtml(file.name)}: ${escapeHtml(e.message)}</div>`);
+        continue;
+      }
+
+      try{
+        const parameterId = await ensureRoomParameter(client, paramCache, parsed.raum, parsed.unit, parsed.suffix);
+        await uploadDailyAverages(client, parameterId, parsed.dailyAverages, file.name);
+
+        summaries.push(`
+          <div class="card" style="margin-bottom:10px;">
+            <strong>${escapeHtml(file.name)}</strong><br>
+            <span style="font-size:13px;color:var(--grey-600);">
+              Raum: ${escapeHtml(parsed.raum)} · Messgrösse: ${escapeHtml(parsed.label)}<br>
+              ${parsed.dailyAverages.length} Tage übernommen, ${parsed.skippedDays} Tage übersprungen (unvollständig, &lt; ${MIN_ROWS_PER_DAY} Messungen) von ${parsed.totalDays} Tagen insgesamt.
+            </span>
+          </div>
+        `);
+      }catch(e){
+        summaries.push(`<div class="msg err">${escapeHtml(file.name)}: ${escapeHtml(e.message)}</div>`);
+      }
+
+      uploadResults.innerHTML = summaries.join('');
+    }
+
+    uploadResults.innerHTML = summaries.join('');
+    showMsg(uploadMsg, 'Upload abgeschlossen.', 'ok');
+    cacheInvalidate('param:');
+    cacheInvalidate('eve:');
+    cacheInvalidate('index:');
+  }catch(e){
+    showMsg(uploadMsg, 'Fehler: ' + e.message, 'err');
+  }
+});
+
+/* ===================== SKODA UPLOAD ===================== */
+const SKODA_SOURCE = 'SkodaApp';
+let skodaEntries = [];
+
+setupDropzone('skodaDropzone', 'skodaFileInput', 'skodaFilename', handleSkodaFile);
+
+function handleSkodaFile(file) {
+  const reader = new FileReader();
+  reader.onload = evt => processSkodaCsv(evt.target.result);
+  reader.readAsText(file, 'utf-8');
+}
+
+// Gibt { date: 'YYYY-MM-DD', time: 'HH:MM' } zurück (Datum getrennt von Uhrzeit,
+// da seestrasse52b_values pro Parameter nur einen Wert pro Tag speichert).
+function convertSkodaDate(raw) {
+  const m = (raw||'').trim().match(/^(\d{2})\.(\d{2})\.(\d{4})\s+(\d{2}):(\d{2})$/);
+  if (!m) return null;
+  const [, dd, mm, yyyy, hh, min] = m;
+  return { date: `${yyyy}-${mm}-${dd}`, time: `${hh}:${min}` };
+}
+
+function processSkodaCsv(text) {
+  const parsed = Papa.parse(text, { header: true, skipEmptyLines: true });
+  const rows = parsed.data;
+  const entries = [];
+  const errors = [];
+
+  rows.forEach((row, idx) => {
+    const lineNo = idx + 2;
+    const rawDate = row['End of trip'];
+    const address = row['End address'] || '';
+    const km = row['End odometer in km'];
+    const soc = row['End SoC in %'];
+
+    const dt = convertSkodaDate(rawDate);
+    if (!dt) {
+      errors.push(`Zeile ${lineNo}: ungültiges Datumsformat in "End of trip" ("${rawDate}")`);
+      return;
+    }
+    const comment = `${dt.time} Uhr${address ? ' · ' + address : ''}`;
+    if (km === undefined || km === '' || isNaN(Number(km))) {
+      errors.push(`Zeile ${lineNo}: ungültiger/fehlender Wert in "End odometer in km" ("${km}")`);
+    } else {
+      entries.push({ Datum: dt.date, ParameterID: PARAM_KM, Value: Number(km), Comment: comment, Source: SKODA_SOURCE });
+    }
+    if (soc === undefined || soc === '' || isNaN(Number(soc))) {
+      errors.push(`Zeile ${lineNo}: ungültiger/fehlender Wert in "End SoC in %" ("${soc}")`);
+    } else {
+      entries.push({ Datum: dt.date, ParameterID: PARAM_SOC, Value: Number(soc), Comment: comment, Source: SKODA_SOURCE });
+    }
+  });
+
+  const dupeKeys = findDupeKeySet(entries);
+  dupeKeys.forEach(key => errors.push(`Duplikat: Datum+ParameterID "${key}" kommt mehrfach in der Datei vor (nur der letzte Wert des Tages wird importiert).`));
+
+  skodaEntries = entries;
+  renderGenericResult({ prefix: 'skoda', totalCount: rows.length, entries, dupeKeys, errors, totalKey: 'Trips' });
+}
+
+document.getElementById('btnSkodaUpload').addEventListener('click', async () => {
+  // Bei mehreren Fahrten am selben Tag/Parameter: nur den letzten Eintrag importieren
+  // (INSERT OR REPLACE würde ohnehin nur den letzten behalten, hier bereits vorab reduziert
+  // damit die Vorschau-Statistik konsistent bleibt).
+  const lastPerKey = new Map();
+  skodaEntries.forEach(e => lastPerKey.set(e.Datum+'|'+e.ParameterID, e));
+  const valid = [...lastPerKey.values()];
+  const btn = document.getElementById('btnSkodaUpload');
+  btn.disabled = true;
+  const result = await importEntries(valid, document.getElementById('skodaProgress'));
+  renderImportResult(document.getElementById('skodaMsg'), result);
+  cacheInvalidate('log:');
+  cacheInvalidate('index:');
+  if (result.failed > 0) btn.disabled = false;
+});
+
+/* ===================== SHARED UI HELPERS ===================== */
+function setupDropzone(zoneId, inputId, filenameId, onFile) {
+  const zone = document.getElementById(zoneId);
+  const input = document.getElementById(inputId);
+  const filenameEl = document.getElementById(filenameId);
+  zone.addEventListener('click', () => input.click());
+  zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('drag'); });
+  zone.addEventListener('dragleave', () => zone.classList.remove('drag'));
+  zone.addEventListener('drop', e => {
+    e.preventDefault(); zone.classList.remove('drag');
+    if (e.dataTransfer.files.length) { filenameEl.textContent = e.dataTransfer.files[0].name; onFile(e.dataTransfer.files[0]); }
+  });
+  input.addEventListener('change', e => {
+    if (e.target.files.length) { filenameEl.textContent = e.target.files[0].name; onFile(e.target.files[0]); }
+  });
+}
+
+function renderGenericResult({ prefix, totalCount, entries, dupeKeys, errors, totalKey }) {
+  document.getElementById(`${prefix}ResultCard`).style.display = 'block';
+  document.getElementById(`${prefix}St${totalKey}`).textContent = totalCount;
+
+  let dupeEntryCount = 0;
+  entries.forEach(e => { if (dupeKeys.has(e.Datum+'|'+e.ParameterID)) dupeEntryCount++; });
+
+  document.getElementById(`${prefix}StValid`).textContent = entries.length - dupeEntryCount;
+  document.getElementById(`${prefix}StDupes`).textContent = dupeEntryCount;
+  document.getElementById(`${prefix}StInvalid`).textContent = errors.length - dupeKeys.size;
+
+  const errSection = document.getElementById(`${prefix}ErrorSection`);
+  const errList = document.getElementById(`${prefix}ErrList`);
+  if (errors.length) {
+    errSection.style.display = 'block';
+    errList.style.whiteSpace = 'pre-line';
+    errList.textContent = `${errors.length} Problem(e) gefunden:\n` + errors.join('\n');
+  } else {
+    errSection.style.display = 'none';
+  }
+
+  const tbody = document.getElementById(`${prefix}PreviewBody`);
+  tbody.innerHTML = entries.map(e => {
+    const isDupe = dupeKeys.has(e.Datum+'|'+e.ParameterID);
+    return `<tr class="${isDupe?'row-dupe':''}">
+      <td class="num">${e.Datum}</td><td class="num">${e.ParameterID}</td><td class="num">${e.Value}</td>
+      <td>${escapeHtml(e.Comment||'')}</td><td><span class="badge off">${e.Source}</span></td>
+    </tr>`;
+  }).join('');
+
+  const anyValid = entries.length > 0;
+  document.getElementById(`btn${cap(prefix)}Upload`).disabled = !anyValid;
+}
+function cap(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
+</script>
+</body>
+</html>

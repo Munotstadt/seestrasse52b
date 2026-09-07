@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Seestrasse 52B · Übersicht</title>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">Seestrasse <span>52B</span></div>
+  <nav class="tabs">
+    <a href="index.html" class="active">Übersicht</a>
+    <a href="log.html">Log</a>
+    <a href="eve-data.html">Eve-Data</a>
+    <a href="uploader.html">Uploader</a>
+    <a href="admin.html">Admin</a>
+  </nav>
+</header>
+<main>
+  <h1>Parameter-Übersicht</h1>
+  <div id="msg" class="msg" style="display:none;"></div>
+  <div id="grid"></div>
+  <div id="empty" class="empty" style="display:none;">Noch keine aktiven Parameter definiert. <a href="admin.html">Parameter anlegen →</a></div>
+  <button id="refreshBtn" class="secondary" style="margin-top:14px;">Aktualisieren</button>
+</main>
+<script src="assets/db.js"></script>
+<script>
+const msg = document.getElementById('msg');
+const grid = document.getElementById('grid');
+
+async function load(forceRefresh){
+  try{
+    const client = getClient();
+    if(forceRefresh){
+      cacheInvalidate('param:');
+      cacheInvalidate('index:');
+    }
+
+    // 'Eve Räume' wird unten als eigener, zusammengefasster Abschnitt (Temp/Luftf. pro Raum) gerendert.
+    const paramsResult = await client.execute(
+      "SELECT ParameterID, ParaGroup, Name, Einheit FROM seestrasse52b_parameter WHERE Active = 1 AND ParaGroup != 'Eve Räume' ORDER BY ParaGroup, Name"
+    );
+    const params = rowsToObjects(paramsResult);
+
+    const latestRows = await queryCached(client, 'index:latest', `
+      SELECT v.ParameterID, v.value, v.date
+      FROM seestrasse52b_values v
+      INNER JOIN (
+        SELECT ParameterID, MAX(date) AS MaxDate
+        FROM seestrasse52b_values GROUP BY ParameterID
+      ) m ON m.ParameterID = v.ParameterID AND m.MaxDate = v.date
+    `);
+    const latestByParam = {};
+    latestRows.forEach(r => { latestByParam[r.ParameterID] = r; });
+
+    const groups = {};
+    params.forEach(p => {
+      const g = p.ParaGroup || 'Ohne Gruppe';
+      if(!groups[g]) groups[g] = [];
+      groups[g].push(p);
+    });
+
+    let html = Object.keys(groups).sort().map(groupName => {
+      const cards = groups[groupName].map(p => {
+        const latest = latestByParam[p.ParameterID];
+        const valueHtml = latest
+          ? `<div class="pvalue">${escapeHtml(latest.value)} <span class="punit">${escapeHtml(p.Einheit||'')}</span></div>
+             <div class="pdate">${fmtDate(latest.date)}</div>`
+          : `<div class="pvalue mono" style="color:var(--grey-600);font-size:15px;">– keine Daten –</div>`;
+        return `<a class="param-card" href="parameter.html?id=${p.ParameterID}">
+                  <div class="pname">${escapeHtml(p.Name)}</div>
+                  ${valueHtml}
+                </a>`;
+      }).join('');
+      return `<h2 style="margin-top:22px;">${escapeHtml(groupName)}</h2><div class="grid">${cards}</div>`;
+    }).join('');
+
+    const eveHtml = await buildEveSection(client, latestByParam);
+    html += eveHtml;
+
+    grid.innerHTML = html;
+    document.getElementById('empty').style.display = (params.length === 0 && !eveHtml) ? 'block' : 'none';
+  }catch(e){
+    showMsg(msg, 'Fehler beim Laden: ' + e.message, 'err');
+  }
+}
+
+// Baut pro Eve-Raum (Label) eine Karte mit aktuellem Temperatur- und Luftfeuchtigkeitswert.
+// Temp/Luftf. sind in diesem Schema zwei eigenständige Parameter mit gleichem Label,
+// ParaGroup='Eve Räume', ParaType='Sensor' — kein separates SensorParameterID/ValueTypeParameterID mehr.
+async function buildEveSection(client, latestByParam){
+  const eveParamsResult = await client.execute(
+    "SELECT ParameterID, Name, Label, Einheit FROM seestrasse52b_parameter WHERE Active = 1 AND ParaGroup = 'Eve Räume' ORDER BY Label, Name"
+  );
+  const eveParams = rowsToObjects(eveParamsResult);
+  if(eveParams.length === 0) return '';
+
+  const byRoom = {};
+  eveParams.forEach(p => {
+    const room = p.Label || p.Name;
+    if(!byRoom[room]) byRoom[room] = [];
+    byRoom[room].push(p);
+  });
+
+  const cards = Object.keys(byRoom).sort().map(room => {
+    const parts = byRoom[room].map(p => {
+      const latest = latestByParam[p.ParameterID];
+      if(!latest) return null;
+      const rounded = Math.round(Number(latest.value) * 10) / 10;
+      return `${rounded.toFixed(1)} ${escapeHtml(p.Einheit||'')}`.trim();
+    }).filter(Boolean);
+    if(parts.length === 0) return '';
+    const anyLatest = byRoom[room].map(p => latestByParam[p.ParameterID]).find(Boolean);
+    const dateHtml = anyLatest ? `<div class="pdate">${fmtDate(anyLatest.date)}</div>` : '';
+    return `<div class="param-card">
+              <div class="pname">${escapeHtml(room)}</div>
+              <div class="pvalue" style="font-size:17px;">${parts.join(' / ')}</div>
+              ${dateHtml}
+            </div>`;
+  }).filter(Boolean).join('');
+
+  if(!cards) return '';
+  return `<h2 style="margin-top:22px;">Eve</h2><div class="grid">${cards}</div>`;
+}
+
+document.getElementById('refreshBtn').addEventListener('click', () => load(true));
+load();
+</script>
+</body>
+</html>

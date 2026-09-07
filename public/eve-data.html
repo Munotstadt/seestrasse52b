@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Seestrasse 52B · Eve-Data</title>
+<link rel="stylesheet" href="assets/style.css">
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">Seestrasse <span>52B</span></div>
+  <nav class="tabs">
+    <a href="index.html">Übersicht</a>
+    <a href="log.html">Log</a>
+    <a href="eve-data.html" class="active">Eve-Data</a>
+    <a href="uploader.html">Uploader</a>
+    <a href="admin.html">Admin</a>
+  </nav>
+</header>
+<main>
+  <h1>Eve Weather · Upload</h1>
+  <p style="color:var(--grey-600);font-size:13px;">
+    Eve-Export-Dateien (.xlsx) auswählen — Temperatur- und Luftfeuchtigkeit-Dateien können gemischt
+    und für mehrere Räume gleichzeitig hochgeladen werden. Pro Tag wird der Durchschnitt berechnet;
+    Tage mit weniger als <span id="minRowsLabel" class="mono"></span> Messungen werden übersprungen.
+    Ein erneuter Upload überschreibt bereits vorhandene Tage automatisch (kein Duplikat).
+  </p>
+  <div class="card" style="margin-bottom:26px;">
+    <div class="field">
+      <label for="fileInput">Eve-Export-Dateien (.xlsx)</label>
+      <input id="fileInput" type="file" accept=".xlsx" multiple>
+    </div>
+    <button id="uploadBtn">Hochladen &amp; verarbeiten</button>
+    <div id="uploadMsg" class="msg" style="display:none;margin-top:12px;"></div>
+    <div id="uploadResults" style="margin-top:14px;"></div>
+  </div>
+
+  <h1>Charts pro Eve-Raum</h1>
+  <div class="search-bar">
+    <select id="sensorSelect"><option value="">Raum wählen …</option></select>
+    <button id="refreshSensorsBtn" class="secondary">Aktualisieren</button>
+  </div>
+  <div id="sensorCount" style="font-size:12px;color:var(--grey-600);margin:6px 0 14px;"></div>
+  <div class="seg-group" id="rangeGroup">
+    <button class="seg-btn" data-range="90">90 Tage</button>
+    <button class="seg-btn active" data-range="360">360 Tage</button>
+    <button class="seg-btn" data-range="all">Alle</button>
+  </div>
+  <div id="chartsMsg" class="msg" style="display:none;"></div>
+  <div id="chartsArea"></div>
+</main>
+
+<script src="assets/db.js"></script>
+<script>
+const MIN_ROWS_PER_DAY = 115;
+document.getElementById('minRowsLabel').textContent = MIN_ROWS_PER_DAY;
+
+const uploadMsg = document.getElementById('uploadMsg');
+const uploadResults = document.getElementById('uploadResults');
+const chartsMsg = document.getElementById('chartsMsg');
+
+/* ---------- Parsing ---------- */
+
+function parseEveWorkbook(arrayBuffer, fileName){
+  const wb = XLSX.read(arrayBuffer, { type: 'array', cellDates: true });
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  const rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: null });
+
+  const raumLine = String(rows[1]?.[0] || '');
+  const raum = raumLine.replace(/^Raum:\s*/i, '').trim();
+  if(!raum) throw new Error(`${fileName}: Raum-Zeile nicht gefunden (Zeile 2 erwartet "Raum: ...").`);
+
+  const headerLine = String(rows[3]?.[1] || '');
+  let valueType, unit, label, suffix;
+  if(/Celsius/i.test(headerLine)){
+    valueType = 'C'; unit = '°C'; label = 'Temperatur (°C)'; suffix = '(Temp)';
+  }else if(/Luftfeuchtigkeit/i.test(headerLine)){
+    valueType = 'RelLuft'; unit = '%'; label = 'Luftfeuchtigkeit (%)'; suffix = '(Luftf.)';
+  }else{
+    throw new Error(`${fileName}: unbekannte Spalte "${headerLine}" (erwartet Temperatur/Celsius oder Luftfeuchtigkeit).`);
+  }
+
+  const byDay = {};
+  for(let i = 4; i < rows.length; i++){
+    const r = rows[i];
+    if(!r || r[0] == null || r[1] == null) continue;
+    const d = r[0] instanceof Date ? r[0] : new Date(r[0]);
+    if(isNaN(d)) continue;
+    const dayKey = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    (byDay[dayKey] = byDay[dayKey] || []).push(Number(r[1]));
+  }
+
+  const dailyAverages = [];
+  let skipped = 0;
+  for(const [day, vals] of Object.entries(byDay)){
+    if(vals.length < MIN_ROWS_PER_DAY){ skipped++; continue; }
+    const avg = vals.reduce((a,b) => a+b, 0) / vals.length;
+    dailyAverages.push({ day, value: Math.round(avg * 100) / 100, count: vals.length });
+  }
+  dailyAverages.sort((a,b) => a.day.localeCompare(b.day));
+
+  return { raum, valueType, unit, label, suffix, dailyAverages, totalDays: Object.keys(byDay).length, skippedDays: skipped };
+}
+
+/* ---------- DB Helpers ----------
+   In diesem Schema ist jeder Raum+Messgrösse-Kombination ein eigenständiger Parameter
+   (ParaGroup='Eve Räume', ParaType='Sensor', Label=Raumname, Name endet auf "(Temp)"/"(Luftf.)").
+   Es gibt keine separate Sensor-/ValueType-Dimension mehr wie früher bei Turso. */
+
+async function ensureRoomParameter(client, cache, roomName, unit, suffix){
+  const cacheKey = roomName.trim().toLowerCase() + '|' + suffix;
+  if(cache[cacheKey]) return cache[cacheKey];
+
+  const existing = rowsToObjects(await client.execute(
+    "SELECT ParameterID FROM seestrasse52b_parameter WHERE ParaGroup = 'Eve Räume' AND LOWER(TRIM(Label)) = ? AND Name LIKE ?",
+    [roomName.trim().toLowerCase(), `%${suffix}`]
+  ));
+  if(existing.length){
+    cache[cacheKey] = existing[0].ParameterID;
+    return cache[cacheKey];
+  }
+
+  const name = `${roomName} ${suffix}`;
+  const res = await client.execute(
+    "INSERT INTO seestrasse52b_parameter (Name, Einheit, Active, ParaType, Label, ParaGroup, table_field, table_name) VALUES (?, ?, 1, 'Sensor', ?, 'Eve Räume', 'parameterID', 'seestrasse52b_values')",
+    [name, unit, roomName]
+  );
+  const newId = res.meta?.last_row_id;
+  cache[cacheKey] = newId;
+  return newId;
+}
+
+async function uploadDailyAverages(client, parameterId, dailyAverages, source){
+  for(const d of dailyAverages){
+    await client.execute(
+      `INSERT INTO seestrasse52b_values (date, ParameterID, value, source)
+       VALUES (?, ?, ?, ?)
+       ON CONFLICT(date, ParameterID)
+       DO UPDATE SET value = excluded.value, source = excluded.source, modified_at = datetime('now')`,
+      [d.day, parameterId, d.value, source]
+    );
+  }
+}
+
+/* ---------- Upload Flow ---------- */
+
+document.getElementById('uploadBtn').addEventListener('click', async () => {
+  const files = document.getElementById('fileInput').files;
+  if(!files || files.length === 0){ showMsg(uploadMsg, 'Bitte mindestens eine Datei auswählen.', 'err'); return; }
+
+  uploadResults.innerHTML = '';
+  showMsg(uploadMsg, `Verarbeite ${files.length} Datei(en) …`, 'ok');
+
+  try{
+    const client = getClient();
+    const paramCache = {};
+    const summaries = [];
+
+    for(const file of files){
+      const buf = await file.arrayBuffer();
+      let parsed;
+      try{
+        parsed = parseEveWorkbook(buf, file.name);
+      }catch(e){
+        summaries.push(`<div class="msg err">${escapeHtml(file.name)}: ${escapeHtml(e.message)}</div>`);
+        continue;
+      }
+
+      try{
+        const parameterId = await ensureRoomParameter(client, paramCache, parsed.raum, parsed.unit, parsed.suffix);
+        await uploadDailyAverages(client, parameterId, parsed.dailyAverages, file.name);
+
+        summaries.push(`
+          <div class="card" style="margin-bottom:10px;">
+            <strong>${escapeHtml(file.name)}</strong><br>
+            <span style="font-size:13px;color:var(--grey-600);">
+              Raum: ${escapeHtml(parsed.raum)} · Messgrösse: ${escapeHtml(parsed.label)}<br>
+              ${parsed.dailyAverages.length} Tage übernommen, ${parsed.skippedDays} Tage übersprungen (unvollständig, &lt; ${MIN_ROWS_PER_DAY} Messungen) von ${parsed.totalDays} Tagen insgesamt.
+            </span>
+          </div>
+        `);
+      }catch(e){
+        summaries.push(`<div class="msg err">${escapeHtml(file.name)}: ${escapeHtml(e.message)}</div>`);
+      }
+
+      uploadResults.innerHTML = summaries.join('');
+    }
+
+    uploadResults.innerHTML = summaries.join('');
+    showMsg(uploadMsg, 'Upload abgeschlossen.', 'ok');
+    cacheInvalidate('param:');
+    cacheInvalidate('eve:');
+    cacheInvalidate('index:');
+    await loadSensors();
+  }catch(e){
+    showMsg(uploadMsg, 'Fehler: ' + e.message, 'err');
+  }
+});
+
+/* ---------- Charts ---------- */
+
+async function loadSensors(){
+  // Bewusst UNCACHED: nach jedem Upload muss die Raumliste sofort vollständig sein.
+  const client = getClient();
+  const result = await client.execute(
+    "SELECT DISTINCT Label FROM seestrasse52b_parameter WHERE ParaGroup = 'Eve Räume' AND Label IS NOT NULL ORDER BY Label"
+  );
+  const rooms = rowsToObjects(result).map(r => r.Label);
+
+  const sel = document.getElementById('sensorSelect');
+  const current = sel.value;
+  sel.innerHTML = '<option value="">Raum wählen …</option>' +
+    rooms.map(r => `<option value="${escapeHtml(r)}">${escapeHtml(r)}</option>`).join('');
+  if(current) sel.value = current;
+  document.getElementById('sensorCount').textContent =
+    rooms.length === 0 ? 'Noch keine Räume angelegt.' :
+    `${rooms.length} Raum/Räume: ${rooms.join(', ')}`;
+}
+
+let currentChartsData = []; // [{ label, unit, rows }]
+let selectedRangeDays = 360; // 90 | 360 | 'all'
+
+document.getElementById('sensorSelect').addEventListener('change', async (ev) => {
+  const room = ev.target.value;
+  const area = document.getElementById('chartsArea');
+  area.innerHTML = '';
+  currentChartsData = [];
+  if(!room) return;
+  try{
+    const client = getClient();
+
+    const roomParamsResult = await client.execute(
+      "SELECT ParameterID, Name, Einheit FROM seestrasse52b_parameter WHERE ParaGroup = 'Eve Räume' AND Label = ? ORDER BY Name",
+      [room]
+    );
+    const roomParams = rowsToObjects(roomParamsResult);
+    if(roomParams.length === 0){
+      showMsg(chartsMsg, 'Für diesen Raum sind keine Messwerte vorhanden.', 'err');
+      return;
+    }
+    chartsMsg.style.display = 'none';
+
+    for(const p of roomParams){
+      const rowsResult = await client.execute(
+        'SELECT date, value FROM seestrasse52b_values WHERE ParameterID = ? ORDER BY date ASC',
+        [p.ParameterID]
+      );
+      const rows = rowsToObjects(rowsResult);
+      currentChartsData.push({ label: p.Name, unit: p.Einheit || '', rows });
+    }
+    renderAllCharts();
+  }catch(e){
+    showMsg(chartsMsg, 'Fehler beim Laden: ' + e.message, 'err');
+  }
+});
+
+document.getElementById('rangeGroup').addEventListener('click', (ev) => {
+  const btn = ev.target.closest('.seg-btn');
+  if(!btn) return;
+  document.querySelectorAll('#rangeGroup .seg-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  const r = btn.dataset.range;
+  selectedRangeDays = r === 'all' ? 'all' : Number(r);
+  renderAllCharts();
+});
+
+function filterByRange(rows, rangeDays){
+  if(rangeDays === 'all' || rows.length === 0) return rows;
+  const maxDate = new Date(rows[rows.length - 1].date).getTime();
+  const cutoff = maxDate - rangeDays * 24 * 60 * 60 * 1000;
+  return rows.filter(r => new Date(r.date).getTime() >= cutoff);
+}
+
+function movingAverage(rows, windowSize){
+  const result = [];
+  for(let i = 0; i < rows.length; i++){
+    const start = Math.max(0, i - windowSize + 1);
+    const slice = rows.slice(start, i + 1);
+    const avg = slice.reduce((a, r) => a + Number(r.value), 0) / slice.length;
+    result.push({ date: rows[i].date, value: Math.round(avg * 100) / 100 });
+  }
+  return result;
+}
+
+function renderAllCharts(){
+  const area = document.getElementById('chartsArea');
+  area.innerHTML = '';
+  for(const cd of currentChartsData){
+    const wrap = document.createElement('div');
+    wrap.className = 'card';
+    wrap.style.marginBottom = '16px';
+    wrap.innerHTML = `
+      <h3>${escapeHtml(cd.label)}</h3>
+      <div class="chart-legend">
+        <span><span class="swatch" style="background:var(--grey-300);"></span>Tageswert</span>
+        <span><span class="swatch" style="background:var(--red);"></span>Ø 30 Tage</span>
+      </div>
+      <div class="chart-wrap" style="position:relative;"></div>
+    `;
+    area.appendChild(wrap);
+    const filtered = filterByRange(cd.rows, selectedRangeDays);
+    drawEveChart(wrap.querySelector('.chart-wrap'), filtered, cd.unit);
+  }
+}
+
+function drawEveChart(wrap, data, unit){
+  if(!data || data.length === 0){
+    wrap.innerHTML = '<div class="empty">Keine Daten vorhanden.</div>';
+    return;
+  }
+  const maData = movingAverage(data, 30);
+
+  const w = wrap.clientWidth || 800, h = 260;
+  const padL = 50, padR = 16, padT = 16, padB = 34;
+  const xs = data.map(d => new Date(d.date).getTime());
+  const ys = data.map(d => Number(d.value));
+  const xMin = Math.min(...xs), xMax = Math.max(...xs);
+  const yMin = Math.min(...ys), yMax = Math.max(...ys);
+  const yPad = (yMax - yMin) * 0.1 || 1;
+  const yLo = yMin - yPad, yHi = yMax + yPad;
+
+  const xScale = x => padL + (xMax === xMin ? 0 : (x - xMin) / (xMax - xMin)) * (w - padL - padR);
+  const yScale = y => h - padB - (yHi === yLo ? 0 : (y - yLo) / (yHi - yLo)) * (h - padT - padB);
+
+  const rawPts = data.map(d => ({ x: xScale(new Date(d.date).getTime()), y: yScale(Number(d.value)), raw: d }));
+  const maPts = maData.map(d => ({ x: xScale(new Date(d.date).getTime()), y: yScale(Number(d.value)), raw: d }));
+  const rawPath = rawPts.map((p,i) => (i===0?'M':'L') + p.x.toFixed(1) + ',' + p.y.toFixed(1)).join(' ');
+  const maPath = maPts.map((p,i) => (i===0?'M':'L') + p.x.toFixed(1) + ',' + p.y.toFixed(1)).join(' ');
+
+  const gridLines = 4;
+  let ySvg = '';
+  for(let i=0;i<=gridLines;i++){
+    const y = padT + i*(h-padT-padB)/gridLines;
+    const val = yHi - i*(yHi-yLo)/gridLines;
+    ySvg += `<line x1="${padL}" y1="${y}" x2="${w-padR}" y2="${y}" stroke="var(--grey-300)" stroke-width="1"/>`;
+    ySvg += `<text x="${padL-8}" y="${y+4}" text-anchor="end" font-size="10" font-family="IBM Plex Mono" fill="#666">${val.toFixed(1)}</text>`;
+  }
+
+  const start = new Date(xMin), end = new Date(xMax);
+  let tick = new Date(start.getFullYear(), start.getMonth(), 1);
+  const monthTicks = [];
+  while(tick.getTime() <= xMax){
+    if(tick.getTime() >= xMin) monthTicks.push(new Date(tick));
+    tick = new Date(tick.getFullYear(), tick.getMonth() + 1, 1);
+  }
+  const maxLabels = 9;
+  const step = Math.max(1, Math.ceil(monthTicks.length / maxLabels));
+  let xSvg = '';
+  monthTicks.forEach((d, i) => {
+    if(i % step !== 0) return;
+    const x = xScale(d.getTime());
+    const label = `${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getFullYear()).slice(-2)}`;
+    xSvg += `<line x1="${x}" y1="${padT}" x2="${x}" y2="${h-padB}" stroke="var(--grey-300)" stroke-width="1"/>`;
+    xSvg += `<text x="${x}" y="${h-padB+16}" text-anchor="middle" font-size="10" font-family="IBM Plex Mono" fill="#666">${label}</text>`;
+  });
+
+  wrap.innerHTML = `
+    <svg class="chart" viewBox="0 0 ${w} ${h}" style="height:${h}px;">
+      ${ySvg}
+      ${xSvg}
+      <path d="${rawPath}" fill="none" stroke="var(--grey-300)" stroke-width="1.5"/>
+      <path d="${maPath}" fill="none" stroke="var(--red)" stroke-width="2"/>
+      <rect class="hitRect" x="${padL}" y="${padT}" width="${w-padL-padR}" height="${h-padT-padB}" fill="transparent"/>
+      <circle class="hoverDot" r="4" fill="var(--red)" style="display:none;"/>
+    </svg>
+  `;
+  const svg = wrap.querySelector('svg');
+  const hitRect = wrap.querySelector('.hitRect');
+  const hoverDot = wrap.querySelector('.hoverDot');
+  const tooltip = document.createElement('div');
+  tooltip.className = 'chart-tooltip';
+  tooltip.style.display = 'none';
+  wrap.appendChild(tooltip);
+
+  function nearest(mx){
+    let best = rawPts[0], bestIdx = 0, bestDist = Infinity;
+    rawPts.forEach((p, idx) => {
+      const d = Math.abs(p.x - mx);
+      if(d < bestDist){ bestDist = d; best = p; bestIdx = idx; }
+    });
+    return { point: best, idx: bestIdx };
+  }
+  function handleMove(clientX, rect){
+    const mx = (clientX - rect.left) * (w / rect.width);
+    const { point, idx } = nearest(mx);
+    const maPoint = maPts[idx];
+    hoverDot.style.display = 'block';
+    hoverDot.setAttribute('cx', point.x); hoverDot.setAttribute('cy', point.y);
+    tooltip.style.display = 'block';
+    tooltip.style.left = ((point.x/w)*rect.width) + 'px';
+    tooltip.style.top = ((point.y/h)*rect.height) + 'px';
+    const uSuffix = unit ? ' '+unit : '';
+    tooltip.textContent = `${fmtDate(point.raw.date)} · ${point.raw.value}${uSuffix} · Ø30: ${maPoint.raw.value}${uSuffix}`;
+  }
+  hitRect.addEventListener('mousemove', (ev) => handleMove(ev.clientX, svg.getBoundingClientRect()));
+  hitRect.addEventListener('mouseleave', () => { hoverDot.style.display='none'; tooltip.style.display='none'; });
+  hitRect.addEventListener('touchmove', (ev) => {
+    handleMove(ev.touches[0].clientX, svg.getBoundingClientRect());
+    ev.preventDefault();
+  }, { passive:false });
+}
+
+loadSensors().catch(e => showMsg(chartsMsg, 'Fehler beim Laden: ' + e.message, 'err'));
+
+document.getElementById('refreshSensorsBtn').addEventListener('click', async () => {
+  cacheInvalidate('param:');
+  cacheInvalidate('eve:');
+  await loadSensors();
+  document.getElementById('sensorSelect').dispatchEvent(new Event('change'));
+});
+</script>
+</body>
+</html>
