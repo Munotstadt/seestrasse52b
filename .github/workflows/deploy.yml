@@ -1,4 +1,4 @@
-name: Deploy to Cloudflare Workers
+﻿name: Deploy to Cloudflare Workers
 
 on:
   push:
@@ -16,3 +16,4 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          wranglerVersion: '4'
