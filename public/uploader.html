@@ -467,13 +467,16 @@ function handleSkodaFile(file) {
   reader.readAsText(file, 'utf-8');
 }
 
-// Gibt { date: 'YYYY-MM-DD', time: 'HH:MM' } zurück (Datum getrennt von Uhrzeit,
-// da seestrasse52b_values pro Parameter nur einen Wert pro Tag speichert).
+// Wandelt "TT.MM.JJJJ HH:MM" in Tageskey + vollen DB-Timestamp
+// (Format muss zum Rest der Tabelle passen: "YYYY-MM-DD HH:MM:00")
 function convertSkodaDate(raw) {
   const m = (raw||'').trim().match(/^(\d{2})\.(\d{2})\.(\d{4})\s+(\d{2}):(\d{2})$/);
   if (!m) return null;
   const [, dd, mm, yyyy, hh, min] = m;
-  return { date: `${yyyy}-${mm}-${dd}`, time: `${hh}:${min}` };
+  return {
+    day: `${yyyy}-${mm}-${dd}`,
+    dbDate: `${yyyy}-${mm}-${dd} ${hh}:${min}:00`
+  };
 }
 
 function processSkodaCsv(text) {
@@ -494,33 +497,36 @@ function processSkodaCsv(text) {
       errors.push(`Zeile ${lineNo}: ungültiges Datumsformat in "End of trip" ("${rawDate}")`);
       return;
     }
-    const comment = `${dt.time} Uhr${address ? ' · ' + address : ''}`;
+    const comment = `${dt.dbDate.slice(11,16)} Uhr${address ? ' · ' + address : ''}`;
     if (km === undefined || km === '' || isNaN(Number(km))) {
       errors.push(`Zeile ${lineNo}: ungültiger/fehlender Wert in "End odometer in km" ("${km}")`);
     } else {
-      entries.push({ Datum: dt.date, ParameterID: PARAM_KM, Value: Number(km), Comment: comment, Source: SKODA_SOURCE });
+      entries.push({ Datum: dt.day, DbDate: dt.dbDate, ParameterID: PARAM_KM, Value: Number(km), Comment: comment, Source: SKODA_SOURCE });
     }
     if (soc === undefined || soc === '' || isNaN(Number(soc))) {
       errors.push(`Zeile ${lineNo}: ungültiger/fehlender Wert in "End SoC in %" ("${soc}")`);
     } else {
-      entries.push({ Datum: dt.date, ParameterID: PARAM_SOC, Value: Number(soc), Comment: comment, Source: SKODA_SOURCE });
+      entries.push({ Datum: dt.day, DbDate: dt.dbDate, ParameterID: PARAM_SOC, Value: Number(soc), Comment: comment, Source: SKODA_SOURCE });
     }
   });
 
   const dupeKeys = findDupeKeySet(entries);
-  dupeKeys.forEach(key => errors.push(`Duplikat: Datum+ParameterID "${key}" kommt mehrfach in der Datei vor (nur der letzte Wert des Tages wird importiert).`));
+  dupeKeys.forEach(key => errors.push(`Duplikat: Datum+ParameterID "${key}" kommt mehrfach in der Datei vor (nur der zeitlich letzte Wert des Tages wird importiert).`));
 
   skodaEntries = entries;
   renderGenericResult({ prefix: 'skoda', totalCount: rows.length, entries, dupeKeys, errors, totalKey: 'Trips' });
 }
 
 document.getElementById('btnSkodaUpload').addEventListener('click', async () => {
-  // Bei mehreren Fahrten am selben Tag/Parameter: nur den letzten Eintrag importieren
-  // (INSERT OR REPLACE würde ohnehin nur den letzten behalten, hier bereits vorab reduziert
-  // damit die Vorschau-Statistik konsistent bleibt).
+  // Pro Tag/Parameter: zeitlich LETZTE Fahrt behalten — Vergleich über DbDate,
+  // nicht über Dateireihenfolge (CSV ist absteigend sortiert!).
   const lastPerKey = new Map();
-  skodaEntries.forEach(e => lastPerKey.set(e.Datum+'|'+e.ParameterID, e));
-  const valid = [...lastPerKey.values()];
+  skodaEntries.forEach(e => {
+    const key = e.Datum + '|' + e.ParameterID;
+    const existing = lastPerKey.get(key);
+    if (!existing || e.DbDate > existing.DbDate) lastPerKey.set(key, e);
+  });
+  const valid = [...lastPerKey.values()].map(e => ({ ...e, Datum: e.DbDate }));
   const btn = document.getElementById('btnSkodaUpload');
   btn.disabled = true;
   const result = await importEntries(valid, document.getElementById('skodaProgress'));
