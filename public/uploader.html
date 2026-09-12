@@ -473,10 +473,7 @@ function convertSkodaDate(raw) {
   const m = (raw||'').trim().match(/^(\d{2})\.(\d{2})\.(\d{4})\s+(\d{2}):(\d{2})$/);
   if (!m) return null;
   const [, dd, mm, yyyy, hh, min] = m;
-  return {
-    day: `${yyyy}-${mm}-${dd}`,
-    dbDate: `${yyyy}-${mm}-${dd} ${hh}:${min}:00`
-  };
+  return { day: `${yyyy}-${mm}-${dd}`, time: `${hh}:${min}` };
 }
 
 function processSkodaCsv(text) {
@@ -497,16 +494,16 @@ function processSkodaCsv(text) {
       errors.push(`Zeile ${lineNo}: ungültiges Datumsformat in "End of trip" ("${rawDate}")`);
       return;
     }
-    const comment = `${dt.dbDate.slice(11,16)} Uhr${address ? ' · ' + address : ''}`;
+    const comment = `${dt.time} Uhr${address ? ' · ' + address : ''}`;
     if (km === undefined || km === '' || isNaN(Number(km))) {
       errors.push(`Zeile ${lineNo}: ungültiger/fehlender Wert in "End odometer in km" ("${km}")`);
     } else {
-      entries.push({ Datum: dt.day, DbDate: dt.dbDate, ParameterID: PARAM_KM, Value: Number(km), Comment: comment, Source: SKODA_SOURCE });
+      entries.push({ Datum: dt.day, Time: dt.time, ParameterID: PARAM_KM, Value: Number(km), Comment: comment, Source: SKODA_SOURCE });
     }
     if (soc === undefined || soc === '' || isNaN(Number(soc))) {
       errors.push(`Zeile ${lineNo}: ungültiger/fehlender Wert in "End SoC in %" ("${soc}")`);
     } else {
-      entries.push({ Datum: dt.day, DbDate: dt.dbDate, ParameterID: PARAM_SOC, Value: Number(soc), Comment: comment, Source: SKODA_SOURCE });
+      entries.push({ Datum: dt.day, Time: dt.time, ParameterID: PARAM_SOC, Value: Number(soc), Comment: comment, Source: SKODA_SOURCE });
     }
   });
 
@@ -518,15 +515,15 @@ function processSkodaCsv(text) {
 }
 
 document.getElementById('btnSkodaUpload').addEventListener('click', async () => {
-  // Pro Tag/Parameter: zeitlich LETZTE Fahrt behalten — Vergleich über DbDate,
+  // Pro Tag/Parameter: zeitlich LETZTE Fahrt behalten — Vergleich über Time (HH:MM),
   // nicht über Dateireihenfolge (CSV ist absteigend sortiert!).
   const lastPerKey = new Map();
   skodaEntries.forEach(e => {
     const key = e.Datum + '|' + e.ParameterID;
     const existing = lastPerKey.get(key);
-    if (!existing || e.DbDate > existing.DbDate) lastPerKey.set(key, e);
+    if (!existing || e.Time > existing.Time) lastPerKey.set(key, e);
   });
-  const valid = [...lastPerKey.values()].map(e => ({ ...e, Datum: e.DbDate }));
+  const valid = [...lastPerKey.values()];
   const btn = document.getElementById('btnSkodaUpload');
   btn.disabled = true;
   const result = await importEntries(valid, document.getElementById('skodaProgress'));
