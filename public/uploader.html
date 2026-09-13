@@ -59,7 +59,7 @@
 <main>
   <h1>Uploader</h1>
   <p style="color:var(--grey-600);font-size:13px;">Manueller Upload, Eve-Upload und Skoda-Upload an einem Ort.</p>
-  <div class="assumption">Hinweis: Pro Parameter ist nur ein Wert pro Tag speicherbar. Bei mehreren Skoda-Fahrten am selben Tag zählt der zuletzt importierte Wert dieses Tages (Uhrzeit/Adresse landet im Kommentarfeld).</div>
+  <div class="assumption">Hinweis: Jede Skoda-Fahrt wird als eigener Eintrag mit vollem Zeitstempel gespeichert — auch mehrere pro Tag.</div>
 
   <div class="tabs2">
     <div class="tab2 active" data-tab="manual">Manueller Upload</div>
@@ -473,7 +473,7 @@ function convertSkodaDate(raw) {
   const m = (raw||'').trim().match(/^(\d{2})\.(\d{2})\.(\d{4})\s+(\d{2}):(\d{2})$/);
   if (!m) return null;
   const [, dd, mm, yyyy, hh, min] = m;
-  return { day: `${yyyy}-${mm}-${dd}`, time: `${hh}:${min}` };
+  return `${yyyy}-${mm}-${dd} ${hh}:${min}:00`;
 }
 
 function processSkodaCsv(text) {
@@ -489,44 +489,36 @@ function processSkodaCsv(text) {
     const km = row['End odometer in km'];
     const soc = row['End SoC in %'];
 
-    const dt = convertSkodaDate(rawDate);
-    if (!dt) {
+    const dbDate = convertSkodaDate(rawDate);
+    if (!dbDate) {
       errors.push(`Zeile ${lineNo}: ungültiges Datumsformat in "End of trip" ("${rawDate}")`);
       return;
     }
-    const comment = `${dt.time} Uhr${address ? ' · ' + address : ''}`;
     if (km === undefined || km === '' || isNaN(Number(km))) {
       errors.push(`Zeile ${lineNo}: ungültiger/fehlender Wert in "End odometer in km" ("${km}")`);
     } else {
-      entries.push({ Datum: dt.day, Time: dt.time, ParameterID: PARAM_KM, Value: Number(km), Comment: comment, Source: SKODA_SOURCE });
+      entries.push({ Datum: dbDate, ParameterID: PARAM_KM, Value: Number(km), Comment: address || null, Source: SKODA_SOURCE });
     }
     if (soc === undefined || soc === '' || isNaN(Number(soc))) {
       errors.push(`Zeile ${lineNo}: ungültiger/fehlender Wert in "End SoC in %" ("${soc}")`);
     } else {
-      entries.push({ Datum: dt.day, Time: dt.time, ParameterID: PARAM_SOC, Value: Number(soc), Comment: comment, Source: SKODA_SOURCE });
+      entries.push({ Datum: dbDate, ParameterID: PARAM_SOC, Value: Number(soc), Comment: address || null, Source: SKODA_SOURCE });
     }
   });
 
+  // Echtes Duplikat = identischer Zeitstempel + ParameterID (z.B. Datei zweimal verarbeitet)
   const dupeKeys = findDupeKeySet(entries);
-  dupeKeys.forEach(key => errors.push(`Duplikat: Datum+ParameterID "${key}" kommt mehrfach in der Datei vor (nur der zeitlich letzte Wert des Tages wird importiert).`));
+  dupeKeys.forEach(key => errors.push(`Duplikat: Datum+ParameterID "${key}" kommt mehrfach in der Datei vor (identischer Zeitstempel).`));
 
   skodaEntries = entries;
   renderGenericResult({ prefix: 'skoda', totalCount: rows.length, entries, dupeKeys, errors, totalKey: 'Trips' });
 }
 
 document.getElementById('btnSkodaUpload').addEventListener('click', async () => {
-  // Pro Tag/Parameter: zeitlich LETZTE Fahrt behalten — Vergleich über Time (HH:MM),
-  // nicht über Dateireihenfolge (CSV ist absteigend sortiert!).
-  const lastPerKey = new Map();
-  skodaEntries.forEach(e => {
-    const key = e.Datum + '|' + e.ParameterID;
-    const existing = lastPerKey.get(key);
-    if (!existing || e.Time > existing.Time) lastPerKey.set(key, e);
-  });
-  const valid = [...lastPerKey.values()];
+  // Keine Tages-Deduplizierung mehr: jede Fahrt wird als eigener Eintrag gespeichert.
   const btn = document.getElementById('btnSkodaUpload');
   btn.disabled = true;
-  const result = await importEntries(valid, document.getElementById('skodaProgress'));
+  const result = await importEntries(skodaEntries, document.getElementById('skodaProgress'));
   renderImportResult(document.getElementById('skodaMsg'), result);
   cacheInvalidate('log:');
   cacheInvalidate('index:');
