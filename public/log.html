@@ -92,10 +92,10 @@ let allRows = [];
 
 async function loadParams(){
   const client = getClient();
-  allParams = await queryCached(client, 'param:generic:all',
-    "SELECT ParameterID, Name, Einheit, Active FROM seestrasse52b_parameter WHERE ParaType = 'Generic' ORDER BY Name"
+  allParams = await queryCached(client, 'param:all',
+    "SELECT ParameterID, Name, Einheit, Active, ParaType FROM seestrasse52b_parameter ORDER BY Name"
   );
-  const activeOptions = allParams.filter(p => Number(p.Active) === 1)
+  const activeOptions = allParams.filter(p => Number(p.Active) === 1 && p.ParaType === 'Generic')
     .map(p => `<option value="${p.ParameterID}">${escapeHtml(p.Name)}${p.Einheit ? ' ('+escapeHtml(p.Einheit)+')' : ''}</option>`).join('');
   document.getElementById('f_param').innerHTML = activeOptions;
   document.getElementById('e_param').innerHTML = allParams
