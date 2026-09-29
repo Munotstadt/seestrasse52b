@@ -1,17 +1,18 @@
 // Aggregiert täglich um 04:00 UTC die Shelly-Rohwerte des Vortags
 // (Lokalzeit-Kalendertag) zu einem Tagesmittel pro ParameterID.
 // Rohwerte: date = 'YYYY-MM-DD HH:MM:SS', source = 'shellyhtg3-*'
-// Aggregat: date = 'YYYY-MM-DD',          source = 'shelly-daily-avg'
+// Aggregat: date = 'YYYY-MM-DD',          source = '<Rohwert-Source>_daily_aggregate'
 
 const AGG = `
   INSERT INTO seestrasse52b_values (date, ParameterID, value, source, comments)
   SELECT date(date), ParameterID, ROUND(AVG(value), 2),
-         'shelly-daily-avg', COUNT(*) || ' Messwerte'
+         source || '_daily_aggregate', COUNT(*) || ' Messwerte'
   FROM seestrasse52b_values
   WHERE source LIKE 'shellyhtg3-%'
+    AND source NOT LIKE '%_daily_aggregate'
     AND length(date) > 10
     AND date(date) = date('now', '-1 day')
-  GROUP BY date(date), ParameterID
+  GROUP BY date(date), ParameterID, source
   ON CONFLICT(date, ParameterID) DO UPDATE SET
     value = excluded.value,
     source = excluded.source,
@@ -21,6 +22,7 @@ const AGG = `
 const CLEANUP = `
   DELETE FROM seestrasse52b_values
   WHERE source LIKE 'shellyhtg3-%'
+    AND source NOT LIKE '%_daily_aggregate'
     AND length(date) > 10
     AND date(date) = date('now', '-1 day')`;
 
