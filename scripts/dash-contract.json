@@ -1,0 +1,19 @@
+{
+  "_doc": "Vertrag zwischen gemeinsamem UI (public/dash) und den zwei Backends. local: dash-local/server.js, online: src/dash/index.js. online: live | pending.",
+  "routes": {
+    "latest":          { "local": "proxy", "online": "live" },
+    "series":          { "local": "proxy", "online": "live" },
+    "outdoor/latest":  { "local": true, "online": "live" },
+    "outdoor/series":  { "local": true, "online": "live" },
+    "energy/latest":   { "local": true, "online": "live" },
+    "energy/summary":  { "local": true, "online": "live" },
+    "energy/series":   { "local": true, "online": "live" },
+    "car/status":      { "local": true, "online": "live" },
+    "car/series":      { "local": true, "online": "live" },
+    "car/*":           { "local": true, "online": "pending", "_doc": "Steuerung (target/charge/cancel) nur lokal" },
+    "water/*":         { "local": true, "online": "pending" },
+    "lichter":         { "local": true, "online": "pending" },
+    "storen":          { "local": true, "online": "pending" }
+  },
+  "pendingOnline": ["water", "storen"]
+}

@@ -1,0 +1,13 @@
+# Cache-Regeln für /dash (identisch zu dash-local/server.js, damit lokal und online gleich schnell laden)
+# vendor/ ändert sich nur bei einem Versionswechsel von Chart.js → Datei dann umbenennen
+/dash/vendor/*
+  Cache-Control: public, max-age=31536000, immutable
+# Rest: 1 Minute frisch, danach sofort aus dem Cache anzeigen und im Hintergrund erneuern
+/dash/css/*
+  Cache-Control: public, max-age=60, stale-while-revalidate=600
+/dash/js/*
+  Cache-Control: public, max-age=60, stale-while-revalidate=600
+/dash/index.html
+  Cache-Control: public, max-age=60, stale-while-revalidate=600
+/dash/version.json
+  Cache-Control: public, max-age=60, stale-while-revalidate=600

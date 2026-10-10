@@ -4,13 +4,28 @@
 "main": "src/index.js",
 "assets": {
 "directory": "./public",
-"binding": "ASSETS"
+"binding": "ASSETS",
+// /dash ohne Slash soll ohne Redirect direkt das UI liefern (siehe src/dash/index.js). Alle anderen
+// statischen Dateien (auch /dash/css, /dash/js, /dash/vendor) werden weiterhin direkt am Edge ausgeliefert.
+"run_worker_first": ["/dash"]
 },
 "d1_databases": [
 {
 "binding": "DB",
 "database_name": "seestrasse52b",
 "database_id": "8114362a-d78d-4c17-9f47-9abee82f3e26"
+},
+// /dash, Seite Temperatur/Aussen Kloten (nur lesen)
+{
+"binding": "METEO",
+"database_name": "meteo",
+"database_id": "17e827ee-3f96-4ce9-b93c-be3cea624448"
+},
+// /dash, Seite Energy (nur lesen)
+{
+"binding": "ENERGY",
+"database_name": "energy",
+"database_id": "5dfeb585-9598-41c5-a485-52d2831e4ec2"
 }
 ],
 "routes": [

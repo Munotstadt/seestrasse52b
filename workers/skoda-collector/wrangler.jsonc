@@ -1,0 +1,16 @@
+{
+  "name": "skoda-enyaq-collector-d1",
+  "main": "src/index.js",
+  "compatibility_date": "2025-06-05",
+  "triggers": { "crons": ["*/5 * * * *"] },
+  "d1_databases": [
+    { "binding": "DB", "database_name": "seestrasse52b", "database_id": "8114362a-d78d-4c17-9f47-9abee82f3e26" }
+  ],
+  "vars": {
+    "SKODA_VIN": "TMBLE9NYXNF026871",
+    // WICHTIG: Das Škoda-Limit (20 Aufrufe/Stunde pro Fahrzeug) gilt für alle Clients zusammen.
+    // Erst auf "1" stellen, NACHDEM der NAS-Collector (skoda-enyaq-collector) gestoppt ist.
+    "COLLECT_ENABLED": "0"
+  }
+  // Secret (nicht hier eintragen):  npx wrangler secret put SKODA_API_KEY --config workers/skoda-collector/wrangler.jsonc
+}
