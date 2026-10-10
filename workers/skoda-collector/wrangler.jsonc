@@ -4,8 +4,8 @@
   "compatibility_date": "2025-06-05",
   "triggers": { "crons": ["*/10 * * * *"] },
   "d1_databases": [
-    // __CAR_DB_ID__ wird von install.ps1 durch die ID der Datenbank «car» ersetzt
-    { "binding": "DB", "database_name": "car", "database_id": "__CAR_DB_ID__" }
+    // 8dcdf6f9-0ccb-4608-bb7d-90580afdc02f wird von install.ps1 durch die ID der Datenbank «car» ersetzt
+    { "binding": "DB", "database_name": "car", "database_id": "8dcdf6f9-0ccb-4608-bb7d-90580afdc02f" }
   ],
   "vars": {
     "SKODA_VIN": "TMBLE9NYXNF026871",

@@ -27,11 +27,11 @@
 "database_name": "energy",
 "database_id": "5dfeb585-9598-41c5-a485-52d2831e4ec2"
 },
-// /dash, Seite Car (nur lesen); __CAR_DB_ID__ ersetzt workers/skoda-collector/install.ps1
+// /dash, Seite Car (nur lesen); 8dcdf6f9-0ccb-4608-bb7d-90580afdc02f ersetzt workers/skoda-collector/install.ps1
 {
 "binding": "CAR",
 "database_name": "car",
-"database_id": "__CAR_DB_ID__"
+"database_id": "8dcdf6f9-0ccb-4608-bb7d-90580afdc02f"
 }
 ],
 "routes": [
