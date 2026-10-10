@@ -1,4 +1,4 @@
--- Datenbank «car» (D1): Škoda Enyaq, befüllt vom Worker «skoda_collector»
+-- Datenbank «car» (D1): Škoda Enyaq, befüllt vom Worker «skoda-collector»
 --   npx wrangler d1 execute car --remote --file=schema/car_db.sql        (macht install.ps1)
 -- Spaltennamen = MariaDB-Tabelle skoda_enyaq_api auf dem NAS → die lokale Version kann später dieselben Abfragen nutzen.
 CREATE TABLE IF NOT EXISTS skoda_collector_tbl (

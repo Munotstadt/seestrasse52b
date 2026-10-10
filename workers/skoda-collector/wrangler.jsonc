@@ -1,5 +1,5 @@
 {
-  "name": "skoda_collector",
+  "name": "skoda-collector",
   "main": "src/index.js",
   "compatibility_date": "2025-06-05",
   "triggers": { "crons": ["*/5 * * * *"] },

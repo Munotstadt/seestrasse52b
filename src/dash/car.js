@@ -1,4 +1,4 @@
-// Seite «Car» online: liest skoda_collector_tbl aus der D1-Datenbank «car» (Binding CAR; gefüllt vom Worker «skoda_collector»).
+// Seite «Car» online: liest skoda_collector_tbl aus der D1-Datenbank «car» (Binding CAR; gefüllt vom Worker «skoda-collector»).
 // Spaltennamen = MariaDB-Tabelle auf dem NAS → die lokale Version kann später mit denselben Abfragen auf D1 umgestellt werden.
 import { num, toIso, sqlTime, dayPrefix } from './util.js';
 

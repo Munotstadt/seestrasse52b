@@ -21,7 +21,7 @@ function Replace-InFile($file, $from, $to) {
 if ($Enable) {
   Replace-InFile $cfgCol '"COLLECT_ENABLED": "0"' '"COLLECT_ENABLED": "1"'
   npx wrangler deploy --config $cfgCol
-  Write-Host "Collector eingeschaltet (alle 5 Min). Prüfen: npx wrangler tail skoda_collector"
+  Write-Host "Collector eingeschaltet (alle 5 Min). Prüfen: npx wrangler tail skoda-collector"
   exit 0
 }
 

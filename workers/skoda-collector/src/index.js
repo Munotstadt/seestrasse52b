@@ -1,5 +1,5 @@
 /**
- * Worker «skoda_collector»: Škoda Enyaq → D1-Datenbank «car», Tabelle skoda_collector_tbl (Ersatz für den NAS-Collector «skoda-enyaq-collector»).
+ * Worker «skoda-collector»: Škoda Enyaq → D1-Datenbank «car», Tabelle skoda_collector_tbl (Ersatz für den NAS-Collector «skoda-enyaq-collector»).
  *
  * Alle 5 Minuten ein Aufruf der MyŠkoda Public API (12 von 20 erlaubten Aufrufen/Stunde). Der NAS-Collector braucht
  * dasselbe Kontingent → nie beide gleichzeitig laufen lassen (COLLECT_ENABLED siehe wrangler.jsonc).

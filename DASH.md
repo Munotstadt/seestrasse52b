@@ -10,7 +10,7 @@ dash-local/                  ← NAS-Backend (Node/Docker: Sensor-Container, Mar
 scripts/dash-check.mjs       ← prüft: lokal = online (Routen, Seiten, pendent-Liste)
 scripts/dash-contract.json   ← der Vertrag zwischen UI und beiden Backends
 scripts/dash-version.mjs     ← Hash des UI-Stands (Badge im Kopf: «lokal · 679a12b» / «online · 679a12b»)
-workers/skoda-collector/     ← Worker «skoda_collector»: Škoda API → D1 «car» (löst später den NAS-Collector ab), install.ps1
+workers/skoda-collector/     ← Worker «skoda-collector»: Škoda API → D1 «car» (löst später den NAS-Collector ab), install.ps1
 schema/car_db.sql            ← Tabellen der Datenbank «car»
 schema/dash_migrations.sql   ← Index für Innensensoren (D1 seestrasse52b)
 ```
@@ -56,7 +56,7 @@ Online ist nur lesend (keine Steuerung). Zugriff: Cloudflare Access wie für die
 ## Einrichten (einmalig)
 
 1. **Škoda-Collector installieren** (legt D1 `car` + Tabellen an, trägt die DB-ID in beide Konfigurationen ein, deployt
-   den Worker `skoda_collector` mit **ausgeschaltetem** Collector, fragt VIN und API-Key im Terminal ab):
+   den Worker `skoda-collector` mit **ausgeschaltetem** Collector, fragt VIN und API-Key im Terminal ab):
    `.\workers\skoda-collector\install.ps1`  – danach `wrangler.jsonc` und `workers/skoda-collector/wrangler.jsonc` committen.
 2. **Push auf `main`** → Deploy-Workflow baut und deployt den Worker inkl. `/dash` (neue D1-Bindings `METEO`, `ENERGY`).
 3. **NAS:** `.\dash-local\deploy-nas.ps1`. Danach lokal unter `http://192.168.86.30:8888/dash/` (`/` leitet weiter).

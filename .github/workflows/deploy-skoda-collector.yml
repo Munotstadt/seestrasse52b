@@ -1,4 +1,4 @@
-name: Deploy skoda_collector
+name: Deploy skoda-collector
 
 on:
   push:
