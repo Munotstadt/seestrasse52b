@@ -24,13 +24,14 @@ function addressOf(v) {
   return pick(pp, 'formattedAddress', 'parkingPosition.formattedAddress');
 }
 
-export function mapVehicle(v, headers) {
+export function mapVehicle(root, headers) {
+  const v = root.vehicle ?? root;   // die API verpackt alles unter «vehicle»
   const st = v.charging?.status || {};
   const meters = num(pick(st, 'battery.remainingCruisingRangeInMeters', 'remainingCruisingRangeInMeters'));
   const reset = headers.get('X-API-Key-Expires-At');
   return {
-    charging_captured_at_utc: sql(pick(st, 'carCapturedTimestamp')),
-    status_captured_at_utc: sql(pick(v, 'status.carCapturedTimestamp', 'status.overall.carCapturedTimestamp')),
+    charging_captured_at_utc: sql(pick(v, 'charging.carCapturedTimestamp')),
+    status_captured_at_utc: sql(pick(v, 'status.carCapturedTimestamp', 'odometer.carCapturedTimestamp')),
     soc_percent: num(pick(st, 'battery.stateOfChargeInPercent', 'stateOfChargeInPercent')),
     range_km: meters == null ? null : Math.round(meters / 100) / 10,
     charge_power_kw: num(pick(st, 'chargePowerInKw')),
