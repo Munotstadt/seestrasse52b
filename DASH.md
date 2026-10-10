@@ -63,7 +63,8 @@ Online ist nur lesend (keine Steuerung). Zugriff: Cloudflare Access wie für die
 4. **Škoda-Limit beachten:** 20 Aufrufe/h pro Fahrzeug für alle Clients zusammen. Der Worker braucht 6/h (alle 10 Min). Läuft der
    NAS-Collector `skoda-enyaq-collector` (12/h) noch parallel, bleiben 2/h für Befehle → ihn stoppen, sobald die D1-Daten stimmen.
    Prüfen nach 10–20 Min: `npx wrangler d1 execute car --remote --command "SELECT * FROM skoda_collector_tbl ORDER BY id DESC LIMIT 3"`
-   (Rohantwort in `skoda_collector_raw`). Ausschalten: `COLLECT_ENABLED` auf `"0"`.
+   (Rohantwort in `skoda_collector_raw`). Manuell auslösen: Secret `RUN_TOKEN` anlegen, dann
+   `https://<worker>.workers.dev/run?token=<RUN_TOKEN>` aufrufen (Mindestabstand 180 s). Ausschalten: `COLLECT_ENABLED` auf `"0"`.
    Die lokale Steuerung (Target SoC, Start/Stopp) braucht weiterhin das Kontingent: 6 Aufrufe/h Collector + Befehle.
    Später kann die lokale Car-Seite ihre Statusdaten aus D1 lesen (gleiche Spaltennamen) und der NAS-Collector entfällt.
 

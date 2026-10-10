@@ -45,9 +45,16 @@ export function mapVehicle(v, headers) {
   };
 }
 
-async function collect(env) {
-  if (env.COLLECT_ENABLED !== '1') { console.log('Collector deaktiviert (COLLECT_ENABLED != 1)'); return; }
+// force = manueller Lauf: ignoriert COLLECT_ENABLED, hält aber den Mindestabstand ein (Škoda: nie schneller als alle 180 s)
+async function collect(env, { force = false } = {}) {
+  if (!force && env.COLLECT_ENABLED !== '1') { console.log('Collector deaktiviert (COLLECT_ENABLED != 1)'); return { ok: false, skipped: 'COLLECT_ENABLED != 1' }; }
   if (!env.SKODA_API_KEY) throw new Error('Secret SKODA_API_KEY fehlt');
+
+  if (force) {
+    const last = await env.DB.prepare('SELECT collected_at_utc AS t FROM skoda_collector_tbl ORDER BY id DESC LIMIT 1').first();
+    const age = last ? (Date.now() - Date.parse(last.t.replace(' ', 'T') + 'Z')) / 1000 : Infinity;
+    if (age < 180) return { ok: false, skipped: `letzter Abruf vor ${Math.round(age)} s – Mindestabstand 180 s (API-Limit)` };
+  }
 
   const r = await fetch(`${BASE}/api/v1/vehicles/${encodeURIComponent(env.SKODA_VIN)}?include=charging,odometer,parkingPosition,status`, {
     headers: { 'X-API-Key': env.SKODA_API_KEY },
@@ -55,8 +62,9 @@ async function collect(env) {
   });
   const remaining = num(r.headers.get('RateLimit-Remaining'));
   if (!r.ok) {
-    console.error(`Škoda API ${r.status}`, (await r.text().catch(() => '')).slice(0, 200), 'remaining', remaining);
-    return;   // kein Retry in derselben Minute – das nächste Intervall kommt in 10 min (Limit schonen)
+    const body = (await r.text().catch(() => '')).replace(/\s+/g, ' ').slice(0, 200);
+    console.error(`Škoda API ${r.status}`, body, 'remaining', remaining);
+    return { ok: false, apiStatus: r.status, apiBody: body, rateLimitRemaining: remaining };   // kein Retry – nächster Lauf in 10 min (Limit schonen)
   }
   const v = await r.json();
   const m = mapVehicle(v, r.headers);
@@ -75,10 +83,22 @@ async function collect(env) {
                     ON CONFLICT(id) DO UPDATE SET collected_at_utc = excluded.collected_at_utc, raw_json = excluded.raw_json`)
       .bind(now, JSON.stringify(v)),
   ]);
+  return { ok: true, collected_at_utc: now, soc_percent: m.soc_percent, range_km: m.range_km, charging_state: m.charging_state,
+           address: m.address, rateLimitRemaining: remaining };
 }
 
 export default {
   async scheduled(event, env, ctx) { ctx.waitUntil(collect(env)); },
-  // Kein HTTP-Auslöser: ein Aufruf von aussen würde das knappe API-Limit (20/h) verbrauchen
-  async fetch() { return new Response('skoda-enyaq-collector-d1: nur per Cron', { status: 404 }); },
+
+  // Manuell auslösen:  https://<worker>.workers.dev/run?token=<RUN_TOKEN>
+  // Nur mit dem Secret RUN_TOKEN (Variablen → Secret anlegen, frei wählbarer langer Text). Ohne Secret ist der Auslöser aus.
+  // Hält den Mindestabstand von 180 s ein, damit auch ein geleaktes Token das API-Limit nicht verbrauchen kann.
+  async fetch(request, env) {
+    const url = new URL(request.url);
+    const json = (o, status = 200) => new Response(JSON.stringify(o, null, 2), { status, headers: { 'Content-Type': 'application/json; charset=utf-8' } });
+    if (url.pathname !== '/run') return json({ error: 'nicht gefunden' }, 404);
+    if (!env.RUN_TOKEN || url.searchParams.get('token') !== env.RUN_TOKEN) return json({ error: 'Token fehlt oder falsch' }, 401);
+    try { return json(await collect(env, { force: true })); }
+    catch (e) { return json({ ok: false, error: String(e.message || e) }, 500); }
+  },
 };
