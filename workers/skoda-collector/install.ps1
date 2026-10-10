@@ -1,4 +1,4 @@
-# Installation Škoda-Collector: Datenbank «car», Tabellen, Worker «skoda_collector», API-Key.
+# Installation Škoda-Collector: Datenbank «car», Tabellen, Worker «skoda-collector», API-Key.
 # PowerShell, aus dem Repo-Ordner (z. B. C:\MunotstadtTools\52b):
 #   .\workers\skoda-collector\install.ps1            # installieren (Collector bleibt AUS)
 #   .\workers\skoda-collector\install.ps1 -Enable    # später: Collector einschalten (nachdem der NAS-Collector gestoppt ist)
