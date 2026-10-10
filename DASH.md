@@ -10,8 +10,9 @@ dash-local/                  ← NAS-Backend (Node/Docker: Sensor-Container, Mar
 scripts/dash-check.mjs       ← prüft: lokal = online (Routen, Seiten, pendent-Liste)
 scripts/dash-contract.json   ← der Vertrag zwischen UI und beiden Backends
 scripts/dash-version.mjs     ← Hash des UI-Stands (Badge im Kopf: «lokal · 679a12b» / «online · 679a12b»)
-workers/skoda-collector/     ← Škoda API → D1 (löst später den NAS-Collector ab)
-schema/dash_migrations.sql   ← einmalig in D1 ausführen
+workers/skoda-collector/     ← Worker «skoda_collector»: Škoda API → D1 «car» (löst später den NAS-Collector ab), install.ps1
+schema/car_db.sql            ← Tabellen der Datenbank «car»
+schema/dash_migrations.sql   ← Index für Innensensoren (D1 seestrasse52b)
 ```
 
 ## Synchron halten
@@ -46,7 +47,7 @@ Ablauf bei einer Änderung: im Repo ändern → `node scripts/dash-check.mjs` �
 |---|---|---|
 | Temperatur | live | Innen: `seestrasse52b_values` (Shelly), Aussen Kloten: D1 `meteo` |
 | Energy | live | D1 `energy` (Live-Punkte + `solarmanager_data`) |
-| Car | live, sobald Collector läuft | `skoda_enyaq_api` in D1 `seestrasse52b` |
+| Car | live, sobald Collector läuft | Tabelle `skoda_collector_tbl` in D1 `car` (Binding `CAR`) |
 | Water | pendent | – |
 | Blinds/Light | pendent | – (Wiser-Gateway nur im Heimnetz) |
 
@@ -54,15 +55,16 @@ Online ist nur lesend (keine Steuerung). Zugriff: Cloudflare Access wie für die
 
 ## Einrichten (einmalig)
 
-1. **D1-Migration:** `npx wrangler d1 execute seestrasse52b --remote --file=schema/dash_migrations.sql`
-   (Tabellen `skoda_enyaq_api`, `skoda_enyaq_raw`, Index für schnellere Innensensor-Verläufe).
+1. **Škoda-Collector installieren** (legt D1 `car` + Tabellen an, trägt die DB-ID in beide Konfigurationen ein, deployt
+   den Worker `skoda_collector` mit **ausgeschaltetem** Collector, fragt VIN und API-Key im Terminal ab):
+   `.\workers\skoda-collector\install.ps1`  – danach `wrangler.jsonc` und `workers/skoda-collector/wrangler.jsonc` committen.
 2. **Push auf `main`** → Deploy-Workflow baut und deployt den Worker inkl. `/dash` (neue D1-Bindings `METEO`, `ENERGY`).
 3. **NAS:** `.\dash-local\deploy-nas.ps1`. Danach lokal unter `http://192.168.86.30:8888/dash/` (`/` leitet weiter).
-4. **Škoda-Umstieg (Reihenfolge einhalten, das API-Limit von 20 Aufrufen/h gilt pro Fahrzeug für alle Clients zusammen):**
-   1. `npx wrangler secret put SKODA_API_KEY --config workers/skoda-collector/wrangler.jsonc`
-   2. NAS-Collector `skoda-enyaq-collector` stoppen.
-   3. In `workers/skoda-collector/wrangler.jsonc` `COLLECT_ENABLED` auf `"1"`, pushen.
-   4. Nach 1–2 Läufen die Daten prüfen (`SELECT * FROM skoda_enyaq_api ORDER BY id DESC LIMIT 3` und `skoda_enyaq_raw`).
+4. **Škoda einschalten** (Reihenfolge einhalten, das API-Limit von 20 Aufrufen/h gilt pro Fahrzeug für alle Clients zusammen):
+   1. NAS-Collector `skoda-enyaq-collector` stoppen.
+   2. `.\workers\skoda-collector\install.ps1 -Enable` (setzt `COLLECT_ENABLED` auf `"1"` und deployt).
+   3. Nach 1–2 Läufen prüfen: `npx wrangler d1 execute car --remote --command "SELECT * FROM skoda_collector_tbl ORDER BY id DESC LIMIT 3"`
+      (Rohantwort in `skoda_collector_raw`).
    Die lokale Steuerung (Target SoC, Start/Stopp) braucht weiterhin das Kontingent: 12 Aufrufe/h Collector + Befehle.
    Später kann die lokale Car-Seite ihre Statusdaten aus D1 lesen (gleiche Spaltennamen) und der NAS-Collector entfällt.
 
@@ -74,6 +76,6 @@ Online ist nur lesend (keine Steuerung). Zugriff: Cloudflare Access wie für die
 - **Energy:** «Heute» wird aus 6-Minuten-Mitteln der Live-Punkte hochgerechnet; MtD/YtD = `solarmanager_data` (bis gestern)
   plus heute. Fehlt dort ein abgeschlossener Tag (Pipeline-Lücke), fehlt er auch in MtD/YtD.
 - **Škoda-Felder:** Das Mapping der API-Antwort ist tolerant geschrieben, aber ungetestet gegen die echte Antwort.
-  Die letzte Rohantwort liegt in `skoda_enyaq_raw` – Abweichungen lassen sich in `mapVehicle()` korrigieren, ohne das
+  Die letzte Rohantwort liegt in `skoda_collector_raw` – Abweichungen lassen sich in `mapVehicle()` korrigieren, ohne das
   API-Limit zu belasten.
 - Die Zeile «Battery» der Temperatur-Kacheln ist online leer (Batteriestand liegt nicht in D1).

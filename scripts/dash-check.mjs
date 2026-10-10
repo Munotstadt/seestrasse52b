@@ -50,5 +50,10 @@ const pendingOnline = [...(online.match(/pages:\s*\{([^}]*)\}/)?.[1] || '').matc
 for (const id of pendingOnline) if (!contract.pendingOnline.includes(id)) fail(`Seite ${id} ist online «pending», aber nicht in dash-contract.json pendingOnline`);
 for (const id of contract.pendingOnline) if (!pendingOnline.includes(id)) fail(`dash-contract.json: ${id} ist pendingOnline, online aber 'live'`);
 
+// 5. Platzhalter der Car-Datenbank (install.ps1 hat noch nicht gelaufen) darf nie deployt werden
+for (const f of ['wrangler.jsonc', 'workers/skoda-collector/wrangler.jsonc']) {
+  if (read(f).includes('__CAR_DB_ID__')) fail(`${f}: __CAR_DB_ID__ fehlt noch – workers/skoda-collector/install.ps1 ausführen`);
+}
+
 if (errors.length) { console.error('dash-check: ' + errors.length + ' Abweichung(en)\n - ' + errors.join('\n - ')); process.exit(1); }
 console.log(`dash-check OK – ${known.length} Routen, ${pagesUi.split(',').length} Seiten, lokal = online`);

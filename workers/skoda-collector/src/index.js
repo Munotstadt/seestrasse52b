@@ -1,11 +1,11 @@
 /**
- * Škoda Enyaq → D1 (Ersatz für den NAS-Collector «skoda-enyaq-collector»).
+ * Worker «skoda_collector»: Škoda Enyaq → D1-Datenbank «car», Tabelle skoda_collector_tbl (Ersatz für den NAS-Collector «skoda-enyaq-collector»).
  *
  * Alle 5 Minuten ein Aufruf der MyŠkoda Public API (12 von 20 erlaubten Aufrufen/Stunde). Der NAS-Collector braucht
  * dasselbe Kontingent → nie beide gleichzeitig laufen lassen (COLLECT_ENABLED siehe wrangler.jsonc).
  *
  * Das Mapping der API-Antwort auf Spalten ist bewusst tolerant (mehrere mögliche Feldpfade); die letzte Rohantwort
- * liegt in skoda_enyaq_raw. Weicht ein Feld ab, genügt es, pick(...) unten anzupassen.
+ * liegt in skoda_collector_raw. Weicht ein Feld ab, genügt es, pick(...) unten anzupassen.
  */
 const BASE = 'https://public.api.connect.skoda-auto.cz';
 
@@ -63,7 +63,7 @@ async function collect(env) {
   const now = sql(Date.now());
 
   await env.DB.batch([
-    env.DB.prepare(`INSERT INTO skoda_enyaq_api
+    env.DB.prepare(`INSERT INTO skoda_collector_tbl
         (collected_at_utc, charging_captured_at_utc, status_captured_at_utc, soc_percent, range_km, charge_power_kw,
          charging_state, plug_connection_state, target_soc_percent, remaining_minutes_to_full, odometer_km,
          address, parking_state, rate_limit_remaining, api_key_expires_at_utc)
@@ -71,7 +71,7 @@ async function collect(env) {
       now, m.charging_captured_at_utc, m.status_captured_at_utc, m.soc_percent, m.range_km, m.charge_power_kw,
       m.charging_state, m.plug_connection_state, m.target_soc_percent, m.remaining_minutes_to_full, m.odometer_km,
       m.address, m.parking_state, remaining, m.api_key_expires_at_utc),
-    env.DB.prepare(`INSERT INTO skoda_enyaq_raw (id, collected_at_utc, raw_json) VALUES (1, ?, ?)
+    env.DB.prepare(`INSERT INTO skoda_collector_raw (id, collected_at_utc, raw_json) VALUES (1, ?, ?)
                     ON CONFLICT(id) DO UPDATE SET collected_at_utc = excluded.collected_at_utc, raw_json = excluded.raw_json`)
       .bind(now, JSON.stringify(v)),
   ]);
