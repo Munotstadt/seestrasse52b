@@ -19,11 +19,19 @@
  * die *.workers.dev-URL, falls die Access-Policy dort mal fehlt).
  */
 
+import { handleDash } from './dash/index.js';
+
 const ACCESS_EMAIL_HEADER = 'Cf-Access-Authenticated-User-Email';
 
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
+
+    // /dash: Dashboard (Online-Version des lokalen NAS-Dashboards), siehe src/dash/index.js
+    if (url.pathname === '/dash' || url.pathname.startsWith('/dash/')) {
+      const res = await handleDash(request, env, ctx);
+      if (res) return res;
+    }
 
     if (url.pathname === '/api/query' && request.method === 'POST') {
       return handleQuery(request, env);

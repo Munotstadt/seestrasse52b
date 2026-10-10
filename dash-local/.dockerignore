@@ -1,0 +1,4 @@
+secrets
+.git
+*.zip
+node_modules

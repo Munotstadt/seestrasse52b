@@ -1,0 +1,25 @@
+name: Deploy skoda-collector
+
+on:
+  push:
+    branches: [main]
+    paths: ['workers/skoda-collector/**']
+  workflow_dispatch: {}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # bricht ab, solange __CAR_DB_ID__ nicht durch install.ps1 ersetzt wurde
+      - name: Check Konfiguration
+        run: node scripts/dash-check.mjs
+
+      - name: Deploy
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: workers/skoda-collector
+          wranglerVersion: '4'

@@ -1,0 +1,22 @@
+services:
+  dashboard52b:
+    build: .
+    container_name: dashboard52b
+    restart: unless-stopped
+    ports:
+      - "8888:8080"      # http://<NAS-IP>:8888
+    env_file: ./secrets/.env
+    volumes:
+      - dashboard52b-data:/data   # merkt sich den laufenden Pumpen-Timer über Neustarts
+    extra_hosts:
+      - "host.docker.internal:host-gateway"   # Zugriff auf Dienste im Host-Netzwerk (z. B. wiser-storen:8085)
+    networks:
+      - default
+      - mariadb_db-network        # Zugriff auf MariaDB (DB_HOST=mariadb)
+
+volumes:
+  dashboard52b-data:
+
+networks:
+  mariadb_db-network:
+    external: true

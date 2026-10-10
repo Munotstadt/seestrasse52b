@@ -1,0 +1,17 @@
+{
+  "name": "skoda-collector",
+  "main": "src/index.js",
+  "compatibility_date": "2025-06-05",
+  "triggers": { "crons": ["*/10 * * * *"] },
+  "d1_databases": [
+    // 8dcdf6f9-0ccb-4608-bb7d-90580afdc02f wird von install.ps1 durch die ID der Datenbank «car» ersetzt
+    { "binding": "DB", "database_name": "car", "database_id": "8dcdf6f9-0ccb-4608-bb7d-90580afdc02f" }
+  ],
+  "vars": {
+    "SKODA_VIN": "TMBLE9NYXNF026871",
+    // Aktiv: alle 10 Min ein API-Aufruf = 6 von 20 erlaubten pro Stunde. Das Limit gilt pro Fahrzeug für alle Clients
+    // zusammen – läuft der NAS-Collector (12/h) noch parallel, bleiben nur 2 Aufrufe/h für Befehle. "0" = Collector aus.
+    "COLLECT_ENABLED": "1"
+  }
+  // Secret (nicht hier eintragen): wird von install.ps1 abgefragt  →  wrangler secret put SKODA_API_KEY
+}

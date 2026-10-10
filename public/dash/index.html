@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<!-- Identisch lokal (NAS) und online (52b.munot.app/dash): beide Backends liefern diese Datei unter /dash/ aus. -->
+<base href="/dash/">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Seestrasse 52b">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<title>Dashboard Seestrasse 52b</title>
+<link rel="stylesheet" href="css/app.css">
+<link rel="modulepreload" href="config.js">
+<link rel="modulepreload" href="js/app.js">
+<link rel="modulepreload" href="js/util.js">
+</head>
+<body>
+<header class="eyebrow">
+  <div class="brand">Dashboard Seestrasse 52b</div>
+  <nav id="nav" aria-label="Bereiche"></nav>
+  <div class="ver" id="ver"></div>
+  <div class="clock" id="clock"></div>
+</header>
+<main id="view"></main>
+
+<script type="module" src="js/app.js"></script>
+</body>
+</html>

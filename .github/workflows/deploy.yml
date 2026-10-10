@@ -11,6 +11,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # /dash: lokal und online müssen denselben UI-Vertrag erfüllen, bevor deployt wird
+      - name: Check /dash (lokal = online)
+        run: node scripts/dash-check.mjs
+
+      # Versions-Hash des UI-Stands → erscheint als Badge im /dash-Kopf (lokal und online identisch)
+      - name: UI-Version schreiben
+        run: node scripts/dash-version.mjs
+
       - name: Deploy
         uses: cloudflare/wrangler-action@v3
         with:

@@ -1,0 +1,10 @@
+{
+  "name": "dashboard-seestrasse-52b",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "server.js",
+  "dependencies": {
+    "mysql2": "^3.24.5"
+  }
+}
