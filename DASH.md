@@ -56,16 +56,15 @@ Online ist nur lesend (keine Steuerung). Zugriff: Cloudflare Access wie für die
 ## Einrichten (einmalig)
 
 1. **Škoda-Collector installieren** (legt D1 `car` + Tabellen an, trägt die DB-ID in beide Konfigurationen ein, deployt
-   den Worker `skoda-collector` mit **ausgeschaltetem** Collector, fragt VIN und API-Key im Terminal ab):
+   den Worker `skoda-collector` (Cron alle 10 Min, `COLLECT_ENABLED = 1`), fragt VIN und API-Key im Terminal ab):
    `.\workers\skoda-collector\install.ps1`  – danach `wrangler.jsonc` und `workers/skoda-collector/wrangler.jsonc` committen.
 2. **Push auf `main`** → Deploy-Workflow baut und deployt den Worker inkl. `/dash` (neue D1-Bindings `METEO`, `ENERGY`).
 3. **NAS:** `.\dash-local\deploy-nas.ps1`. Danach lokal unter `http://192.168.86.30:8888/dash/` (`/` leitet weiter).
-4. **Škoda einschalten** (Reihenfolge einhalten, das API-Limit von 20 Aufrufen/h gilt pro Fahrzeug für alle Clients zusammen):
-   1. NAS-Collector `skoda-enyaq-collector` stoppen.
-   2. `.\workers\skoda-collector\install.ps1 -Enable` (setzt `COLLECT_ENABLED` auf `"1"` und deployt).
-   3. Nach 1–2 Läufen prüfen: `npx wrangler d1 execute car --remote --command "SELECT * FROM skoda_collector_tbl ORDER BY id DESC LIMIT 3"`
-      (Rohantwort in `skoda_collector_raw`).
-   Die lokale Steuerung (Target SoC, Start/Stopp) braucht weiterhin das Kontingent: 12 Aufrufe/h Collector + Befehle.
+4. **Škoda-Limit beachten:** 20 Aufrufe/h pro Fahrzeug für alle Clients zusammen. Der Worker braucht 6/h (alle 10 Min). Läuft der
+   NAS-Collector `skoda-enyaq-collector` (12/h) noch parallel, bleiben 2/h für Befehle → ihn stoppen, sobald die D1-Daten stimmen.
+   Prüfen nach 10–20 Min: `npx wrangler d1 execute car --remote --command "SELECT * FROM skoda_collector_tbl ORDER BY id DESC LIMIT 3"`
+   (Rohantwort in `skoda_collector_raw`). Ausschalten: `COLLECT_ENABLED` auf `"0"`.
+   Die lokale Steuerung (Target SoC, Start/Stopp) braucht weiterhin das Kontingent: 6 Aufrufe/h Collector + Befehle.
    Später kann die lokale Car-Seite ihre Statusdaten aus D1 lesen (gleiche Spaltennamen) und der NAS-Collector entfällt.
 
 ## Annahmen, die du kurz prüfen solltest (ich hatte keinen Zugriff auf deine D1)

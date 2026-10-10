@@ -2,16 +2,16 @@
   "name": "skoda-collector",
   "main": "src/index.js",
   "compatibility_date": "2025-06-05",
-  "triggers": { "crons": ["*/5 * * * *"] },
+  "triggers": { "crons": ["*/10 * * * *"] },
   "d1_databases": [
     // __CAR_DB_ID__ wird von install.ps1 durch die ID der Datenbank «car» ersetzt
     { "binding": "DB", "database_name": "car", "database_id": "__CAR_DB_ID__" }
   ],
   "vars": {
     "SKODA_VIN": "TMBLE9NYXNF026871",
-    // WICHTIG: Das Škoda-Limit (20 Aufrufe/Stunde pro Fahrzeug) gilt für alle Clients zusammen.
-    // Erst auf "1" stellen (install.ps1 -Enable), NACHDEM der NAS-Collector (skoda-enyaq-collector) gestoppt ist.
-    "COLLECT_ENABLED": "0"
+    // Aktiv: alle 10 Min ein API-Aufruf = 6 von 20 erlaubten pro Stunde. Das Limit gilt pro Fahrzeug für alle Clients
+    // zusammen – läuft der NAS-Collector (12/h) noch parallel, bleiben nur 2 Aufrufe/h für Befehle. "0" = Collector aus.
+    "COLLECT_ENABLED": "1"
   }
   // Secret (nicht hier eintragen): wird von install.ps1 abgefragt  →  wrangler secret put SKODA_API_KEY
 }

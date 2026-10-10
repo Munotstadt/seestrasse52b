@@ -1,7 +1,7 @@
-# Installation Škoda-Collector: Datenbank «car», Tabellen, Worker «skoda-collector», API-Key.
+# Installation Škoda-Collector: Datenbank «car», Tabellen, Worker «skoda-collector» (aktiv, alle 10 Min), API-Key.
 # PowerShell, aus dem Repo-Ordner (z. B. C:\MunotstadtTools\52b):
-#   .\workers\skoda-collector\install.ps1            # installieren (Collector bleibt AUS)
-#   .\workers\skoda-collector\install.ps1 -Enable    # später: Collector einschalten (nachdem der NAS-Collector gestoppt ist)
+#   .\workers\skoda-collector\install.ps1            # installieren (Collector ist aktiv, sobald der Key gesetzt ist)
+#   .\workers\skoda-collector\install.ps1 -Enable    # Collector wieder einschalten, falls er auf "0" stand
 # Der API-Key wird nur hier im Terminal eingegeben und geht direkt an Cloudflare (nicht in Dateien, nicht in den Chat).
 # Voraussetzung: einmalig «npx wrangler login».
 param([switch]$Enable)
@@ -55,7 +55,7 @@ if ($vin) {
 npx wrangler d1 execute car --remote --file="$repo\schema\car_db.sql"
 npx wrangler d1 execute seestrasse52b --remote --file="$repo\schema\dash_migrations.sql"   # Index für Innensensor-Verläufe
 
-# 5) Worker deployen (Collector noch AUS), danach API-Key als Secret
+# 5) Worker deployen, danach API-Key als Secret (bis dahin schlägt jeder Lauf mit «Secret fehlt» fehl, ohne API-Aufruf)
 npx wrangler deploy --config $cfgCol
 Write-Host "`nJetzt den Škoda API-Key einfügen (Eingabe bleibt unsichtbar):"
 npx wrangler secret put SKODA_API_KEY --config $cfgCol
@@ -65,6 +65,5 @@ Write-Host @"
 Fertig. Nächste Schritte:
   1. Geänderte Dateien committen und pushen: wrangler.jsonc, workers/skoda-collector/wrangler.jsonc
      (enthalten jetzt die Datenbank-ID; ohne Push scheitert der nächste Deploy am Platzhalter-Check).
-  2. NAS-Collector 'skoda-enyaq-collector' stoppen (Limit: 20 API-Aufrufe/Stunde für alle zusammen).
-  3. .\workers\skoda-collector\install.ps1 -Enable
+  2. NAS-Collector 'skoda-enyaq-collector' stoppen (Limit: 20 API-Aufrufe/Stunde für alle zusammen; dieser Worker braucht 6).
 "@

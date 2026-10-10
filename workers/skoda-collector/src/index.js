@@ -1,8 +1,8 @@
 /**
  * Worker «skoda-collector»: Škoda Enyaq → D1-Datenbank «car», Tabelle skoda_collector_tbl (Ersatz für den NAS-Collector «skoda-enyaq-collector»).
  *
- * Alle 5 Minuten ein Aufruf der MyŠkoda Public API (12 von 20 erlaubten Aufrufen/Stunde). Der NAS-Collector braucht
- * dasselbe Kontingent → nie beide gleichzeitig laufen lassen (COLLECT_ENABLED siehe wrangler.jsonc).
+ * Alle 10 Minuten ein Aufruf der MyŠkoda Public API (6 von 20 erlaubten Aufrufen/Stunde). Der NAS-Collector braucht
+ * dasselbe Kontingent (12/h) → am besten stoppen (COLLECT_ENABLED siehe wrangler.jsonc).
  *
  * Das Mapping der API-Antwort auf Spalten ist bewusst tolerant (mehrere mögliche Feldpfade); die letzte Rohantwort
  * liegt in skoda_collector_raw. Weicht ein Feld ab, genügt es, pick(...) unten anzupassen.
@@ -56,7 +56,7 @@ async function collect(env) {
   const remaining = num(r.headers.get('RateLimit-Remaining'));
   if (!r.ok) {
     console.error(`Škoda API ${r.status}`, (await r.text().catch(() => '')).slice(0, 200), 'remaining', remaining);
-    return;   // kein Retry in derselben Minute – das nächste Intervall kommt in 5 min (Limit schonen)
+    return;   // kein Retry in derselben Minute – das nächste Intervall kommt in 10 min (Limit schonen)
   }
   const v = await r.json();
   const m = mapVehicle(v, r.headers);
