@@ -5,7 +5,8 @@ import { num, toIso, sqlTime, dayPrefix } from './util.js';
 export function mapCar(r) {
   const power = num(r.charge_power_kw);
   return {
-    collectedAt: toIso(r.collected_at_utc),
+    collectedAt: toIso(r.last_seen_utc || r.collected_at_utc),   // letzter Abruf (Zustand kann seit collected_at_utc unverändert sein)
+    sinceAt: toIso(r.collected_at_utc),
     reportedAt: toIso(r.charging_captured_at_utc || r.status_captured_at_utc || r.collected_at_utc),
     soc: num(r.soc_percent),
     rangeKm: num(r.range_km),
@@ -27,7 +28,7 @@ const need = env => { if (!env.CAR) { const e = new Error('Datenbank «car» nic
 export async function carStatus(env) {
   need(env);
   const row = await env.CAR.prepare(
-    `SELECT collected_at_utc, charging_captured_at_utc, status_captured_at_utc,
+    `SELECT collected_at_utc, last_seen_utc, charging_captured_at_utc, status_captured_at_utc,
             soc_percent, range_km, charge_power_kw, charging_state, plug_connection_state,
             target_soc_percent, remaining_minutes_to_full, address, parking_state,
             rate_limit_remaining, api_key_expires_at_utc
