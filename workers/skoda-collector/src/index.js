@@ -86,8 +86,8 @@ async function collect(env, { force = false } = {}) {
     : env.DB.prepare(`INSERT INTO skoda_collector_tbl
         (collected_at_utc, last_seen_utc, charging_captured_at_utc, status_captured_at_utc, soc_percent, range_km, charge_power_kw,
          charging_state, plug_connection_state, target_soc_percent, remaining_minutes_to_full, odometer_km,
-         address, parking_state, rate_limit_remaining, api_key_expires_at_utc)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).bind(
+         address, parking_state, rate_limit_remaining, api_key_expires_at_utc, source)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'SkodaAPI')`).bind(
       now, now, m.charging_captured_at_utc, m.status_captured_at_utc, m.soc_percent, m.range_km, m.charge_power_kw,
       m.charging_state, m.plug_connection_state, m.target_soc_percent, m.remaining_minutes_to_full, m.odometer_km,
       m.address, m.parking_state, remaining, m.api_key_expires_at_utc);
