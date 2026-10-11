@@ -45,6 +45,8 @@ CREATE TABLE IF NOT EXISTS skoda_trips_tbl (
   avg_speed_kmh REAL,
   consumption_kwh REAL, consumption_kwh_per_100km REAL,
   start_soc_percent REAL, end_soc_percent REAL,
+  start_range_km REAL, end_range_km REAL,   -- Reichweite bei Start/Ende (nicht im CSV-Export, daher fuer Altdaten NULL)
+  temperature_c REAL, weather TEXT, tires TEXT,  -- Aussentemperatur, Wetter, Bereifung (z.B. Sommer/Winter); manuell/aus Wetterdaten zu fuellen
   public_charging_stops INTEGER, public_charge_soc_gained_percent REAL,
   short_trip INTEGER                         -- 1 = kurze Fahrt
 );
