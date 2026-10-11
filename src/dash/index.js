@@ -56,7 +56,7 @@ export async function handleDash(request, env, ctx) {
       case 'energy/summary':  return await cachedJson(request, ctx, 60, () => energySummary(env));
       case 'energy/series':   return await cachedJson(request, ctx, 60, () => energySeries(env, oneOf(q.get('range'), ['today', '24h', '7d'], 'today')));
       case 'car/status':      return await cachedJson(request, ctx, 20, () => carStatus(env));
-      case 'car/series':      return await cachedJson(request, ctx, 120, () => carSeries(env, oneOf(q.get('range'), ['24h', '7d'], '24h')));
+      case 'car/series':      return await cachedJson(request, ctx, 120, () => carSeries(env, oneOf(q.get('range'), ['24h', '7d', '30d'], '24h')));
     }
     // Water / Blinds+Light: online «pendent» (kein Gegenstück in D1)
     if (/^(water|lichter|storen)(\/|$)/.test(route)) return json({ error: 'Nur im Heimnetz verfügbar (pendent)' }, 404);
