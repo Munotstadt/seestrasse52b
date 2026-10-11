@@ -1,10 +1,11 @@
 -- Datenbank «car» (D1): Škoda Enyaq, befüllt vom Worker «skoda-collector»
 --   npx wrangler d1 execute car --remote --file=schema/car_db.sql        (macht install.ps1)
--- Bestehende Datenbank nachrüsten:  ALTER TABLE skoda_collector_tbl ADD COLUMN last_seen_utc TEXT;  UPDATE skoda_collector_tbl SET last_seen_utc = collected_at_utc WHERE last_seen_utc IS NULL;
+-- Bestehende Datenbank nachrüsten (+ ALTER TABLE skoda_collector_tbl ADD COLUMN source TEXT):  ALTER TABLE skoda_collector_tbl ADD COLUMN last_seen_utc TEXT;  UPDATE skoda_collector_tbl SET last_seen_utc = collected_at_utc WHERE last_seen_utc IS NULL;
 -- Spaltennamen = MariaDB-Tabelle skoda_enyaq_api auf dem NAS → die lokale Version kann später dieselben Abfragen nutzen.
 CREATE TABLE IF NOT EXISTS skoda_collector_tbl (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   collected_at_utc TEXT NOT NULL,            -- 'YYYY-MM-DD HH:MM:SS' (UTC): Beginn des Zustands (erster Abruf, z. B. Ankunft)
+  source TEXT,                               -- Herkunft: 'SkodaApp' = Import aus MyŠkoda-Fahrtenstatistik, leer = Collector (API)
   last_seen_utc TEXT,                        -- letzter Abruf mit demselben Zustand (Standzeit = last_seen_utc − collected_at_utc)
   charging_captured_at_utc TEXT,
   status_captured_at_utc TEXT,
@@ -46,6 +47,7 @@ CREATE TABLE IF NOT EXISTS skoda_trips_tbl (
   consumption_kwh REAL, consumption_kwh_per_100km REAL,
   start_soc_percent REAL, end_soc_percent REAL,
   public_charging_stops INTEGER, public_charge_soc_gained_percent REAL,
-  short_trip INTEGER                         -- 1 = kurze Fahrt
+  short_trip INTEGER,                        -- 1 = kurze Fahrt
+  source TEXT                                -- Herkunft, z. B. 'SkodaApp'
 );
 CREATE INDEX IF NOT EXISTS idx_skoda_trips_end ON skoda_trips_tbl(end_utc);
