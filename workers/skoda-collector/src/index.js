@@ -56,7 +56,7 @@ async function collect(env, { force = false } = {}) {
   if (!env.SKODA_API_KEY) throw new Error('Secret SKODA_API_KEY fehlt');
 
   if (force) {
-    const last = await env.DB.prepare('SELECT COALESCE(last_seen_utc, collected_at_utc) AS t FROM skoda_collector_tbl ORDER BY id DESC LIMIT 1').first();
+    const last = await env.DB.prepare('SELECT COALESCE(last_seen_utc, collected_at_utc) AS t FROM skoda_collector_tbl ORDER BY collected_at_utc DESC, id DESC LIMIT 1').first();
     const age = last ? (Date.now() - Date.parse(last.t.replace(' ', 'T') + 'Z')) / 1000 : Infinity;
     if (age < 180) return { ok: false, skipped: `letzter Abruf vor ${Math.round(age)} s – Mindestabstand 180 s (API-Limit)` };
   }
@@ -76,7 +76,7 @@ async function collect(env, { force = false } = {}) {
   const now = sql(Date.now());
 
   // Unveränderter Zustand (Auto steht) → keine neue Zeile: collected_at_utc bleibt (= Ankunft/Beginn), last_seen_utc wird nachgeführt.
-  const last = await env.DB.prepare('SELECT * FROM skoda_collector_tbl ORDER BY id DESC LIMIT 1').first();
+  const last = await env.DB.prepare('SELECT * FROM skoda_collector_tbl ORDER BY collected_at_utc DESC, id DESC LIMIT 1').first();
   const same = last && CONTENT.every(k => (last[k] ?? null) === (m[k] ?? null));
 
   const write = same
