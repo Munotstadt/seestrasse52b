@@ -248,7 +248,8 @@ async function wiserRoute(req, res, p) {
 async function carRoute(req, res, p) {
   try {
     if (p === '/api/car/series' && req.method === 'GET') {
-      const range = new URL(req.url, 'http://x').searchParams.get('range') === '7d' ? '7d' : '24h';
+      const r = new URL(req.url, 'http://x').searchParams.get('range');
+      const range = ['24h', '7d', '30d'].includes(r) ? r : '24h';
       try { return json(res, 200, await cached('car-series-' + range, 120e3, () => carSeries(range))); }
       catch (e) { console.error('Car:', e.message); return json(res, 502, { error: 'Verlauf nicht lesbar: ' + e.message }); }
     }

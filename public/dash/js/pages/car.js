@@ -35,6 +35,7 @@ export function mount(el) {
         <div class="csoc" id="ksoc">–<small> %</small></div>
         <div class="cbar"><div id="kfill"></div><i id="ktick" hidden></i></div>
         <div class="crow"><span>Range</span><b id="krange">–</b></div>
+        <div class="crow"><span>Odometer</span><b id="kodo">–</b></div>
         <div class="crow"><span>Target SoC</span><b id="ktarget">–</b></div>
       </section>
       <section class="wcard">
@@ -82,6 +83,7 @@ export function mount(el) {
           <div class="ranges" id="kranges">
             <button data-r="24h" class="active">24 h</button>
             <button data-r="7d">7 days</button>
+            <button data-r="30d">30 days</button>
           </div>
           <button class="close" id="kclose" aria-label="Close">✕</button>
         </div>
@@ -89,6 +91,7 @@ export function mount(el) {
       <div class="charts">
         <div class="panel"><div class="chartlabel">State of charge (%)</div><div class="chartbox"><canvas id="kcSoc"></canvas></div></div>
         <div class="panel"><div class="chartlabel">Range (km)</div><div class="chartbox"><canvas id="kcRange"></canvas></div></div>
+        <div class="panel"><div class="chartlabel">Odometer (km)</div><div class="chartbox"><canvas id="kcOdo"></canvas></div></div>
       </div>
       <div class="err" id="kcerr" hidden></div>
     </section>`;
@@ -157,6 +160,7 @@ export function mount(el) {
     $("ktick").hidden = car.targetSoc == null;
     if (car.targetSoc != null) $("ktick").style.left = car.targetSoc + "%";
     $("krange").textContent = car.rangeKm == null ? "–" : Math.round(car.rangeKm) + " km";
+    $("kodo").textContent = car.odometerKm == null ? "–" : Math.round(car.odometerKm).toLocaleString("de-CH") + " km";
     const pend = car.pendingTarget != null && car.pendingTarget !== car.targetSoc ? ` → ${car.pendingTarget} % (sent)` : "";
     $("ktarget").textContent = car.targetSoc == null ? "–" : car.targetSoc + " %" + pend;
     $("kplug").textContent = car.plugged == null ? "–" : car.plugged ? "Yes" : "No";
@@ -250,6 +254,7 @@ export function mount(el) {
       if (!alive || $("ksheet").hidden) return;
       draw("kcSoc", d.soc, { color: css("--ok"), unit: "%", dec: 0, minSpan: 10 });
       draw("kcRange", d.range, { color: css("--hum"), unit: "km", dec: 0, minSpan: 20 });
+      draw("kcOdo", d.odometer || [], { color: css("--temp"), unit: "km", dec: 0, minSpan: 10 });
     } catch (e) {
       err.textContent = "Could not load history: " + e.message;
       err.hidden = false;
