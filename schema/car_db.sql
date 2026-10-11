@@ -1,9 +1,11 @@
 -- Datenbank «car» (D1): Škoda Enyaq, befüllt vom Worker «skoda-collector»
 --   npx wrangler d1 execute car --remote --file=schema/car_db.sql        (macht install.ps1)
+-- Bestehende Datenbank nachrüsten:  ALTER TABLE skoda_collector_tbl ADD COLUMN last_seen_utc TEXT;  UPDATE skoda_collector_tbl SET last_seen_utc = collected_at_utc WHERE last_seen_utc IS NULL;
 -- Spaltennamen = MariaDB-Tabelle skoda_enyaq_api auf dem NAS → die lokale Version kann später dieselben Abfragen nutzen.
 CREATE TABLE IF NOT EXISTS skoda_collector_tbl (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  collected_at_utc TEXT NOT NULL,            -- 'YYYY-MM-DD HH:MM:SS' (UTC)
+  collected_at_utc TEXT NOT NULL,            -- 'YYYY-MM-DD HH:MM:SS' (UTC): Beginn des Zustands (erster Abruf, z. B. Ankunft)
+  last_seen_utc TEXT,                        -- letzter Abruf mit demselben Zustand (Standzeit = last_seen_utc − collected_at_utc)
   charging_captured_at_utc TEXT,
   status_captured_at_utc TEXT,
   soc_percent REAL,

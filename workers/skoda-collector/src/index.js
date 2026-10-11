@@ -56,7 +56,7 @@ async function collect(env, { force = false } = {}) {
   if (!env.SKODA_API_KEY) throw new Error('Secret SKODA_API_KEY fehlt');
 
   if (force) {
-    const last = await env.DB.prepare('SELECT collected_at_utc AS t FROM skoda_collector_tbl ORDER BY id DESC LIMIT 1').first();
+    const last = await env.DB.prepare('SELECT COALESCE(last_seen_utc, collected_at_utc) AS t FROM skoda_collector_tbl ORDER BY id DESC LIMIT 1').first();
     const age = last ? (Date.now() - Date.parse(last.t.replace(' ', 'T') + 'Z')) / 1000 : Infinity;
     if (age < 180) return { ok: false, skipped: `letzter Abruf vor ${Math.round(age)} s – Mindestabstand 180 s (API-Limit)` };
   }
@@ -75,20 +75,20 @@ async function collect(env, { force = false } = {}) {
   const m = mapVehicle(v, r.headers);
   const now = sql(Date.now());
 
-  // Unveränderter Zustand (Auto steht, nichts ändert sich) → keine neue Zeile, nur Zeitstempel der letzten Zeile nachführen.
+  // Unveränderter Zustand (Auto steht) → keine neue Zeile: collected_at_utc bleibt (= Ankunft/Beginn), last_seen_utc wird nachgeführt.
   const last = await env.DB.prepare('SELECT * FROM skoda_collector_tbl ORDER BY id DESC LIMIT 1').first();
   const same = last && CONTENT.every(k => (last[k] ?? null) === (m[k] ?? null));
 
   const write = same
-    ? env.DB.prepare(`UPDATE skoda_collector_tbl SET collected_at_utc = ?, charging_captured_at_utc = ?, status_captured_at_utc = ?,
+    ? env.DB.prepare(`UPDATE skoda_collector_tbl SET last_seen_utc = ?, charging_captured_at_utc = ?, status_captured_at_utc = ?,
                         rate_limit_remaining = ?, api_key_expires_at_utc = ? WHERE id = ?`)
         .bind(now, m.charging_captured_at_utc, m.status_captured_at_utc, remaining, m.api_key_expires_at_utc, last.id)
     : env.DB.prepare(`INSERT INTO skoda_collector_tbl
-        (collected_at_utc, charging_captured_at_utc, status_captured_at_utc, soc_percent, range_km, charge_power_kw,
+        (collected_at_utc, last_seen_utc, charging_captured_at_utc, status_captured_at_utc, soc_percent, range_km, charge_power_kw,
          charging_state, plug_connection_state, target_soc_percent, remaining_minutes_to_full, odometer_km,
          address, parking_state, rate_limit_remaining, api_key_expires_at_utc)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).bind(
-      now, m.charging_captured_at_utc, m.status_captured_at_utc, m.soc_percent, m.range_km, m.charge_power_kw,
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).bind(
+      now, now, m.charging_captured_at_utc, m.status_captured_at_utc, m.soc_percent, m.range_km, m.charge_power_kw,
       m.charging_state, m.plug_connection_state, m.target_soc_percent, m.remaining_minutes_to_full, m.odometer_km,
       m.address, m.parking_state, remaining, m.api_key_expires_at_utc);
 
