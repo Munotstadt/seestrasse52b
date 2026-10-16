@@ -9,6 +9,7 @@ const kwh = v => (v == null ? "–" : fmtN(v, v >= 100 ? 0 : 1));
 const net = (a, b) => (a == null || b == null ? null : a - b);   // Bezug – Einspeisung (> 0 = Bezug)
 const neg = v => (v == null ? null : v === 0 ? 0 : -v);                    // «to Grid» wird mit Minus angezeigt (Einspeisung)
 const int = v => (v == null ? "–" : String(Math.round(v)).replace(/\B(?=(\d{3})+(?!\d))/g, "\u2019"));   // 12’345, keine Dezimalstellen
+const dec1 = v => (v == null ? "–" : Number(v).toFixed(1).replace(/\B(?=(\d{3})+(?!\d))/g, "\u2019"));   // 1’234.5 (nur «Today»)
 const pct = v => (v == null ? "–" : fmtN(v, 0));
 
 export function mount(el) {
@@ -69,11 +70,11 @@ export function mount(el) {
     try {
       const d = await getJson("energy/summary");
       if (!alive) return;
-      $("esum").innerHTML = [["Today", d.today], ["MtD", d.mtd], ["YtD", d.ytd]].map(([title, v]) => `
+      $("esum").innerHTML = [["Today", d.today], ["MtD", d.mtd], ["YtD", d.ytd]].map(([title, v]) => { const kf = title === "Today" ? dec1 : int; return `
         <div class="wcard">
           <div class="wtop"><span class="wname">${esc(title)}</span></div>
-          ${ROWS.map(([l, k, u, f]) => `<div class="crow"><span>${l}</span><b>${f(k === "netGrid" ? net(v?.fromGrid, v?.toGrid) : k === "toGrid" ? neg(v?.toGrid) : v?.[k])} ${u}</b></div>`).join("")}
-        </div>`).join("");
+          ${ROWS.map(([l, k, u, f]) => `<div class="crow"><span>${l}</span><b>${(u === "kWh" ? kf : f)(k === "netGrid" ? net(v?.fromGrid, v?.toGrid) : k === "toGrid" ? neg(v?.toGrid) : v?.[k])} ${u}</b></div>`).join("")}
+        </div>`; }).join("");
     } catch (e) { if (alive) setErr(e.message); }
   }
 
