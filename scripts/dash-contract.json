@@ -7,6 +7,7 @@
     "outdoor/series":  { "local": true, "online": "live" },
     "energy/latest":   { "local": true, "online": "live" },
     "energy/summary":  { "local": true, "online": "live" },
+    "energy/history":  { "local": true, "online": "live" },
     "energy/series":   { "local": true, "online": "live" },
     "car/status":      { "local": true, "online": "live" },
     "car/series":      { "local": true, "online": "live" },

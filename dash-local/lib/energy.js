@@ -96,3 +96,34 @@ export async function energySeries(range, now = Date.now()) {
   const d = await get(`/api/day?from=${encodeURIComponent(new Date(from).toISOString())}&to=${encodeURIComponent(new Date(now).toISOString())}`);
   return { points: bucket6(d.points, range === '7d' ? 30 * 60e3 : BUCKET_MS) };   // 7 Tage: 30 min (identisch zur Online-Version)
 }
+
+// Monats-/Jahrestabelle: letzte 15 Monate (inkl. laufender) und letzte 5 Jahre; neueste zuerst (identisch zu src/dash/energy.js).
+export const HIST_MONTHS = 15, HIST_YEARS = 5;
+function localMidnight(y, m) {        // Beginn von Monat m (1-12, auch 13 = Folgejahr) in Zürcher Zeit → UTC-ms
+  const local = Date.UTC(y, m - 1, 1);
+  let t = local - offsetMs(local);
+  t = local - offsetMs(t);
+  return t;
+}
+export async function energyHistory(now = Date.now()) {
+  const p = Object.fromEntries(new Intl.DateTimeFormat('en-US', { timeZone: TZ, year: 'numeric', month: 'numeric' })
+    .formatToParts(new Date(now)).map(x => [x.type, Number(x.value)]));
+  const range = async (y, m, y2, m2) => {
+    const from = localMidnight(y, m), to = Math.min(localMidnight(y2, m2), now);
+    if (from >= to) return null;
+    const d = await get(`/api/day?from=${encodeURIComponent(new Date(from).toISOString())}&to=${encodeURIComponent(new Date(to).toISOString())}`);
+    const e = mapEnergy(d.energy);
+    return e.consumption == null && e.production == null ? null : e;
+  };
+  const jobs = [], keys = [];
+  for (let i = 0; i < HIST_MONTHS; i++) {
+    const idx = p.year * 12 + (p.month - 1) - i, y = Math.floor(idx / 12), m = idx % 12 + 1;
+    keys.push(`${y}-${String(m).padStart(2, '0')}`);
+    jobs.push(range(y, m, m === 12 ? y + 1 : y, m === 12 ? 1 : m + 1));
+  }
+  const ykeys = [];
+  for (let i = 0; i < HIST_YEARS; i++) { const y = p.year - i; ykeys.push(String(y)); jobs.push(range(y, 1, y + 1, 1)); }
+  const res = await Promise.all(jobs);
+  const pick = (ks, off) => ks.map((k, i) => (res[off + i] ? { k, ...res[off + i] } : null)).filter(Boolean);
+  return { months: pick(keys, 0), years: pick(ykeys, HIST_MONTHS) };
+}

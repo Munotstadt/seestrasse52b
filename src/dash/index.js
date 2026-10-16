@@ -11,7 +11,7 @@
  */
 import { json, cachedJson } from './util.js';
 import { innerLatest, innerSeries, outdoorLatest, outdoorSeries } from './temperatur.js';
-import { energyLatest, energySummary, energySeries } from './energy.js';
+import { energyLatest, energySummary, energySeries, energyHistory } from './energy.js';
 import { carStatus, carSeries } from './car.js';
 
 // Online-Gegenstück zu CONFIG in dash-local/server.js. Neue Seite online freischalten: 'pending' → 'live'.
@@ -54,6 +54,7 @@ export async function handleDash(request, env, ctx) {
       case 'outdoor/series':  return await cachedJson(request, ctx, 300, () => outdoorSeries(env, oneOf(q.get('range'), ['24h', '7d', '30d', '1y'], '24h')));
       case 'energy/latest':   return await cachedJson(request, ctx, 15, () => energyLatest(env));
       case 'energy/summary':  return await cachedJson(request, ctx, 60, () => energySummary(env));
+      case 'energy/history':  return await cachedJson(request, ctx, 300, () => energyHistory(env));
       case 'energy/series':   return await cachedJson(request, ctx, 60, () => energySeries(env, oneOf(q.get('range'), ['today', '24h', '7d'], 'today')));
       case 'car/status':      return await cachedJson(request, ctx, 20, () => carStatus(env));
       case 'car/series':      return await cachedJson(request, ctx, 120, () => carSeries(env, oneOf(q.get('range'), ['24h', '7d'], '24h')));

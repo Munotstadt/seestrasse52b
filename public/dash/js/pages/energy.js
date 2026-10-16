@@ -6,6 +6,7 @@ const COLORS = { production: "#f2b705", consumption: "#d62728", grid: "#6b7280" 
 
 const kw = w => (w == null ? "–" : fmtN(w / 1000, 2));
 const kwh = v => (v == null ? "–" : fmtN(v, v >= 100 ? 0 : 1));
+const net = (a, b) => (a == null || b == null ? null : a - b);   // Bezug – Einspeisung (> 0 = Bezug)
 const pct = v => (v == null ? "–" : fmtN(v, 0));
 
 export function mount(el) {
@@ -15,7 +16,7 @@ export function mount(el) {
     <div class="energy">
       <div class="chartlabel egroup">Current <span id="eage"></span></div>
       <div class="grid" id="enow">
-        ${["Consumption", "Production", "from Grid", "to Grid"].map((n, i) =>
+        ${["Consumption", "Production", "Grid (net)", "from Grid", "to Grid"].map((n, i) =>
           `<div class="tile"><div class="name">${n}</div><div class="big" id="en${i}">–<small> kW</small></div></div>`).join("")}
       </div>
       <div class="chartlabel egroup">Energy</div>
@@ -32,6 +33,10 @@ export function mount(el) {
           <span><i style="background:${COLORS.grid}"></i>Grid (&gt;0 from, &lt;0 to)</span>
         </div>
       </div>
+      <div class="chartlabel egroup">Last 15 months</div>
+      <div class="panel etable" id="emonths"></div>
+      <div class="chartlabel egroup">Years</div>
+      <div class="panel etable" id="eyears"></div>
       <div class="note" id="eerr" hidden></div>
     </div>`;
   const $ = id => el.querySelector("#" + id);
@@ -44,7 +49,7 @@ export function mount(el) {
       const d = await getJson("energy/latest");
       if (!alive) return;
       if (!d) { setErr("No data yet"); return; }
-      [d.consumption, d.production, d.fromGrid, d.toGrid].forEach((v, i) => {
+      [d.consumption, d.production, net(d.fromGrid, d.toGrid), d.fromGrid, d.toGrid].forEach((v, i) => {
         $("en" + i).innerHTML = `${kw(v)}<small> kW</small>`;
       });
       const a = ageText(d.t, 10);
@@ -55,7 +60,7 @@ export function mount(el) {
   }
 
   const ROWS = [["Consumption", "consumption", "kWh", kwh], ["Production", "production", "kWh", kwh],
-    ["from Grid", "fromGrid", "kWh", kwh], ["to Grid", "toGrid", "kWh", kwh],
+    ["Grid (net)", "netGrid", "kWh", kwh], ["from Grid", "fromGrid", "kWh", kwh], ["to Grid", "toGrid", "kWh", kwh],
     ["Self", "selfPct", "%", pct], ["Autarky", "autarkyPct", "%", pct]];
 
   async function loadSummary() {
@@ -65,8 +70,22 @@ export function mount(el) {
       $("esum").innerHTML = [["Today", d.today], ["MtD", d.mtd], ["YtD", d.ytd]].map(([title, v]) => `
         <div class="wcard">
           <div class="wtop"><span class="wname">${esc(title)}</span></div>
-          ${ROWS.map(([l, k, u, f]) => `<div class="crow"><span>${l}</span><b>${f(v?.[k])} ${u}</b></div>`).join("")}
+          ${ROWS.map(([l, k, u, f]) => `<div class="crow"><span>${l}</span><b>${f(k === "netGrid" ? net(v?.fromGrid, v?.toGrid) : v?.[k])} ${u}</b></div>`).join("")}
         </div>`).join("");
+    } catch (e) { if (alive) setErr(e.message); }
+  }
+
+  const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const table = (rows, label) => `<table><thead><tr><th>${label}</th>${["Consumption", "Production", "Grid (net)", "from Grid", "to Grid"].map(h => `<th>${h}</th>`).join("")}</tr></thead><tbody>${
+    rows.map(r => `<tr><td>${esc(r.label)}</td>${[r.consumption, r.production, net(r.fromGrid, r.toGrid), r.fromGrid, r.toGrid].map(v => `<td>${kwh(v)}</td>`).join("")}</tr>`).join("")
+  }</tbody></table><div class="eunit">kWh</div>`;
+
+  async function loadHistory() {
+    try {
+      const d = await getJson("energy/history");
+      if (!alive) return;
+      $("emonths").innerHTML = table((d.months || []).map(r => ({ ...r, label: `${MON[+r.k.slice(5) - 1]} ${r.k.slice(0, 4)}` })), "Month");
+      $("eyears").innerHTML = table((d.years || []).map(r => ({ ...r, label: r.k })), "Year");
     } catch (e) { if (alive) setErr(e.message); }
   }
 
@@ -110,7 +129,9 @@ export function mount(el) {
 
   ensureChart();   // parallel zu den Daten vorladen
   const refresh = () => { loadNow(); loadSummary(); loadChart(); };
+  loadHistory();   // ändert sich nur täglich → nicht im 30-s-Poll
+  const histPoll = setInterval(loadHistory, 600000);
   refresh();
   const poll = setInterval(refresh, POLL_MS);
-  return () => { alive = false; clearInterval(poll); if (chart) chart.destroy(); };
+  return () => { alive = false; clearInterval(poll); clearInterval(histPoll); if (chart) chart.destroy(); };
 }
