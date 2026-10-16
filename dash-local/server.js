@@ -12,7 +12,7 @@ import { extname, join, normalize, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { gzipSync, brotliCompressSync } from 'node:zlib';
 import { carStatus, carSeries, latestRateLimit } from './lib/car.js';
-import { energyLatest, energySummary, energySeries } from './lib/energy.js';
+import { energyLatest, energySummary, energySeries, energyHistory } from './lib/energy.js';
 import { wiserList, wiserCommand, WiserError } from './lib/wiser.js';
 import { skodaEnabled } from './lib/skoda.js';
 import * as carctl from './lib/carcontrol.js';
@@ -372,6 +372,7 @@ http.createServer(async (req, res) => {
       try {
         if (p === '/api/energy/latest') return json(res, 200, await cached('e-latest', 15e3, energyLatest));
         if (p === '/api/energy/summary') return json(res, 200, await cached('e-summary', 60e3, () => energySummary()));
+        if (p === '/api/energy/history') return json(res, 200, await cached('e-history', 300e3, () => energyHistory()));
         if (p === '/api/energy/series') {
           const r = url.searchParams.get('range');
           const range = ['today', '24h', '7d'].includes(r) ? r : 'today';

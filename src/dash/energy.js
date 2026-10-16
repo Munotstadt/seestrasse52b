@@ -106,3 +106,39 @@ export async function energySeries(env, range, now = Date.now()) {
     points: rows.map(r => ({ t: new Date(r.b * 1000).toISOString(), production: avg(r.pv), consumption: avg(r.cons), grid: avg(r.grid) })),
   };
 }
+
+// Monats-/Jahrestabelle: letzte 15 Monate (inkl. laufender) und letzte 5 Jahre; neueste zuerst.
+// Vergangene Tage aus solarmanager_data, «heute» aus den Live-Punkten (wie energySummary).
+export const HIST_MONTHS = 15, HIST_YEARS = 5;
+export async function energyHistory(env, now = Date.now()) {
+  const today = zurichIso(now);
+  const y0 = Number(today.slice(0, 4)), m0 = Number(today.slice(5, 7));
+  const keys = [];
+  for (let i = HIST_MONTHS - 1; i >= 0; i--) {
+    const idx = y0 * 12 + (m0 - 1) - i;
+    keys.push(`${Math.floor(idx / 12)}-${String(idx % 12 + 1).padStart(2, '0')}`);
+  }
+  const firstYear = y0 - HIST_YEARS + 1;
+  const [pts, mon, yr] = await Promise.all([
+    buckets(env, zurichStart('day', now), 360),
+    env.ENERGY.prepare(
+      `SELECT substr(Date_ISO,1,7) AS k, SUM(Consumption_kWh) AS cons, SUM(Production_kWh) AS pv, SUM(GridFrom_kWh) AS imp, SUM(GridTo_kWh) AS exp
+         FROM solarmanager_data WHERE Date_ISO >= ? AND Date_ISO < ? GROUP BY k`).bind(keys[0] + '-01', today).all(),
+    env.ENERGY.prepare(
+      `SELECT substr(Date_ISO,1,4) AS k, SUM(Consumption_kWh) AS cons, SUM(Production_kWh) AS pv, SUM(GridFrom_kWh) AS imp, SUM(GridTo_kWh) AS exp
+         FROM solarmanager_data WHERE Date_ISO >= ? AND Date_ISO < ? GROUP BY k`).bind(firstYear + '-01-01', today).all(),
+  ]);
+  const t = integrate(pts);
+  const build = (rows, wanted, cur) => {
+    const m = new Map((rows.results || []).map(r => [r.k, r]));
+    return wanted.map(k => {
+      const r = m.get(k);
+      const a = { pv: num(r?.pv) ?? 0, cons: num(r?.cons) ?? 0, imp: num(r?.imp) ?? 0, exp: num(r?.exp) ?? 0 };
+      if (k === cur) { a.pv += t.pv; a.cons += t.cons; a.imp += t.imp; a.exp += t.exp; }
+      return r || k === cur ? { k, ...mapEnergy(a) } : null;
+    }).filter(Boolean).reverse();
+  };
+  const years = [];
+  for (let y = firstYear; y <= y0; y++) years.push(String(y));
+  return { months: build(mon, keys, today.slice(0, 7)), years: build(yr, years, today.slice(0, 4)) };
+}
