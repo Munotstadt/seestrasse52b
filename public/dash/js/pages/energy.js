@@ -79,9 +79,9 @@ export function mount(el) {
   }
 
   const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-  const table = (rows, label) => `<table><thead><tr><th>${label}</th>${["Consumption", "Production", "Grid (net)", "from Grid", "to Grid"].map(h => `<th>${h}</th>`).join("")}</tr></thead><tbody>${
-    rows.map(r => `<tr><td>${esc(r.label)}</td>${[r.consumption, r.production, net(r.fromGrid, r.toGrid), r.fromGrid, neg(r.toGrid)].map(v => `<td>${int(v)}</td>`).join("")}</tr>`).join("")
-  }</tbody></table><div class="eunit">kWh</div>`;
+  const table = (rows, label) => `<table><thead><tr><th>${label}</th>${["Consumption", "Production", "Grid (net)", "from Grid", "to Grid", "Self", "Autarky"].map(h => `<th>${h}</th>`).join("")}</tr></thead><tbody>${
+    rows.map(r => `<tr><td>${esc(r.label)}</td>${[r.consumption, r.production, net(r.fromGrid, r.toGrid), r.fromGrid, neg(r.toGrid)].map(v => `<td>${int(v)}</td>`).join("")}${[r.selfPct, r.autarkyPct].map(v => `<td>${pct(v)} %</td>`).join("")}</tr>`).join("")
+  }</tbody></table><div class="eunit">kWh · Self / Autarky in %</div>`;
 
   async function loadHistory() {
     try {
