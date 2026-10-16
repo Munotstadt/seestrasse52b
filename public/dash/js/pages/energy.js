@@ -7,6 +7,8 @@ const COLORS = { production: "#f2b705", consumption: "#d62728", grid: "#6b7280" 
 const kw = w => (w == null ? "–" : fmtN(w / 1000, 2));
 const kwh = v => (v == null ? "–" : fmtN(v, v >= 100 ? 0 : 1));
 const net = (a, b) => (a == null || b == null ? null : a - b);   // Bezug – Einspeisung (> 0 = Bezug)
+const neg = v => (v == null ? null : v === 0 ? 0 : -v);                    // «to Grid» wird mit Minus angezeigt (Einspeisung)
+const int = v => (v == null ? "–" : String(Math.round(v)).replace(/\B(?=(\d{3})+(?!\d))/g, "\u2019"));   // 12’345, keine Dezimalstellen
 const pct = v => (v == null ? "–" : fmtN(v, 0));
 
 export function mount(el) {
@@ -49,7 +51,7 @@ export function mount(el) {
       const d = await getJson("energy/latest");
       if (!alive) return;
       if (!d) { setErr("No data yet"); return; }
-      [d.consumption, d.production, net(d.fromGrid, d.toGrid), d.fromGrid, d.toGrid].forEach((v, i) => {
+      [d.consumption, d.production, net(d.fromGrid, d.toGrid), d.fromGrid, neg(d.toGrid)].forEach((v, i) => {
         $("en" + i).innerHTML = `${kw(v)}<small> kW</small>`;
       });
       const a = ageText(d.t, 10);
@@ -70,14 +72,14 @@ export function mount(el) {
       $("esum").innerHTML = [["Today", d.today], ["MtD", d.mtd], ["YtD", d.ytd]].map(([title, v]) => `
         <div class="wcard">
           <div class="wtop"><span class="wname">${esc(title)}</span></div>
-          ${ROWS.map(([l, k, u, f]) => `<div class="crow"><span>${l}</span><b>${f(k === "netGrid" ? net(v?.fromGrid, v?.toGrid) : v?.[k])} ${u}</b></div>`).join("")}
+          ${ROWS.map(([l, k, u, f]) => `<div class="crow"><span>${l}</span><b>${f(k === "netGrid" ? net(v?.fromGrid, v?.toGrid) : k === "toGrid" ? neg(v?.toGrid) : v?.[k])} ${u}</b></div>`).join("")}
         </div>`).join("");
     } catch (e) { if (alive) setErr(e.message); }
   }
 
   const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
   const table = (rows, label) => `<table><thead><tr><th>${label}</th>${["Consumption", "Production", "Grid (net)", "from Grid", "to Grid"].map(h => `<th>${h}</th>`).join("")}</tr></thead><tbody>${
-    rows.map(r => `<tr><td>${esc(r.label)}</td>${[r.consumption, r.production, net(r.fromGrid, r.toGrid), r.fromGrid, r.toGrid].map(v => `<td>${kwh(v)}</td>`).join("")}</tr>`).join("")
+    rows.map(r => `<tr><td>${esc(r.label)}</td>${[r.consumption, r.production, net(r.fromGrid, r.toGrid), r.fromGrid, neg(r.toGrid)].map(v => `<td>${int(v)}</td>`).join("")}</tr>`).join("")
   }</tbody></table><div class="eunit">kWh</div>`;
 
   async function loadHistory() {
