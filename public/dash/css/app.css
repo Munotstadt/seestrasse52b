@@ -149,9 +149,10 @@ main { position: fixed; top: var(--hh); left: 0; right: 0; bottom: 0; overflow-y
 .esum .crow b { white-space: nowrap; font-variant-numeric: tabular-nums; }
 .esum .wname { font-weight: 700; color: var(--text); font-size: 15px; }
 .etable { padding: 8px 10px; overflow-x: auto; }
-.etable table { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.etable table { width: 100%; table-layout: fixed; min-width: 560px; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .etable th, .etable td { padding: 6px 8px; text-align: right; border-top: 1px solid var(--line); }
 .etable th:first-child, .etable td:first-child { text-align: left; }
+.etable th:first-child, .etable td:first-child { width: 96px; }
 .etable thead th { border-top: 0; color: var(--muted); font-weight: 600; font-size: 12px; }
 .etable td:first-child { font-weight: 600; }
 .etable .eunit { font-size: 11px; color: var(--muted); text-align: right; padding: 4px 8px 0; }
