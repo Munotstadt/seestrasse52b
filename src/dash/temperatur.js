@@ -4,12 +4,20 @@
 // Antwortformate sind identisch zu dash-local/server.js bzw. dem Sensor-Container.
 import { r1, num, ms, toIso, dayPrefix, sqlTime } from './util.js';
 
-// Gerät → Parameter-IDs in seestrasse52b_parameter. Neuen Sensor hier eintragen (und nur hier).
+// Sensor → Parameter-IDs in seestrasse52b_parameter (temp / hum / bat; hum und bat optional). Neuen Sensor hier eintragen (und nur hier).
+// 4 und 8 senden aktuell nicht mehr (Kachel zeigt dann «Updated: …» mit grauem Punkt).
 export const SENSORS = [
-  { id: 'shellyhtg3-d885ac14cadc', temp: 11, hum: 22 },
-  { id: 'shellyhtg3-d885ac14e968', temp: 7,  hum: 18 },
+  { id: 'eve-4',  temp: 4,  hum: 17 },
+  { id: 'eve-7',  temp: 7,  hum: 18, bat: 26 },
+  { id: 'eve-8',  temp: 8,  hum: 19 },
+  { id: 'eve-9',  temp: 9,  hum: 20, bat: 27 },
+  { id: 'eve-10', temp: 10, hum: 21, bat: 28 },
+  { id: 'eve-11', temp: 11, hum: 22, bat: 25 },
+  { id: 'eve-29', temp: 29 },
 ];
-const PARAM_IDS = SENSORS.flatMap(s => [s.temp, s.hum]);
+const paramsOf = s => [s.temp, s.hum, s.bat].filter(x => x != null);
+const PARAM_IDS = SENSORS.flatMap(paramsOf);
+const TEMP_IDS = SENSORS.map(s => s.temp);
 const IN = PARAM_IDS.join(',');
 
 // «Wohnzimmer (Temp)» / «Wohnzimmer Temperatur» → «Wohnzimmer»
@@ -21,7 +29,7 @@ export async function innerLatest(env) {
   const [names, recent, ...lasts] = await env.DB.batch([
     env.DB.prepare(`SELECT ParameterID, Name, Label FROM seestrasse52b_parameter WHERE ParameterID IN (${IN})`),
     env.DB.prepare(`SELECT ParameterID AS p, date AS d, value AS v FROM seestrasse52b_values
-                     WHERE date >= ? AND ParameterID IN (${IN}) ORDER BY date LIMIT 20000`).bind(since),
+                     WHERE date >= ? AND ParameterID IN (${TEMP_IDS.join(',')}) ORDER BY date LIMIT 20000`).bind(since),
     ...PARAM_IDS.map(id => env.DB.prepare(
       `SELECT ParameterID AS p, date AS d, value AS v FROM seestrasse52b_values WHERE ParameterID = ? ORDER BY date DESC LIMIT 1`).bind(id)),
   ]);
@@ -32,11 +40,11 @@ export async function innerLatest(env) {
 
   return SENSORS.map(s => {
     const mine = id => rows.filter(r => r.p === id && ms(r.d) >= cut).map(r => num(r.v)).filter(v => v != null);
-    const t = last.get(s.temp), h = last.get(s.hum);
+    const t = last.get(s.temp), h = last.get(s.hum), bt = last.get(s.bat);
     const t24 = mine(s.temp);
     return {
       id: s.id, name: roomName(nm.get(s.temp)) || s.id, kind: 'shelly',
-      date: toIso(t?.d || h?.d), temp: r1(num(t?.v)), hum: r1(num(h?.v)), battery: null,
+      date: toIso(t?.d || h?.d), temp: r1(num(t?.v)), hum: r1(num(h?.v)), battery: r1(num(bt?.v)),
       temp_min24: t24.length ? r1(Math.min(...t24)) : null,
       temp_max24: t24.length ? r1(Math.max(...t24)) : null,
     };
@@ -68,11 +76,11 @@ export async function innerSeries(env, sensorId, range) {
   const since = Date.now() - hours * 3600e3;
   const { results } = await env.DB.prepare(
     `SELECT ParameterID AS p, date AS d, value AS v FROM seestrasse52b_values
-      WHERE ParameterID IN (?, ?) AND date >= ? ORDER BY date LIMIT 40000`).bind(s.temp, s.hum, dayPrefix(since)).all();
+      WHERE ParameterID IN (?, ?) AND date >= ? ORDER BY date LIMIT 40000`).bind(s.temp, s.hum ?? s.temp, dayPrefix(since)).all();
   const rows = (results || []).filter(r => ms(r.d) >= since - 43200e3);   // Datumsvergleich war grob → exakt nachfiltern
   return {
     temp: bucketize(rows.filter(r => r.p === s.temp), bucket),
-    hum: bucketize(rows.filter(r => r.p === s.hum), bucket),
+    hum: s.hum == null ? [] : bucketize(rows.filter(r => r.p === s.hum), bucket),
   };
 }
 
