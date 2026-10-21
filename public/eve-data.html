@@ -67,22 +67,30 @@ function parseEveWorkbook(arrayBuffer, fileName){
   const ws = wb.Sheets[wb.SheetNames[0]];
   const rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: null });
 
-  const raumLine = String(rows[1]?.[0] || '');
-  const raum = raumLine.replace(/^Raum:\s*/i, '').trim();
-  if(!raum) throw new Error(`${fileName}: Raum-Zeile nicht gefunden (Zeile 2 erwartet "Raum: ...").`);
+  // Eve exportiert je nach App-Sprache "Raum:"/"Room:" und "Luftfeuchtigkeit"/"Humidity".
+  // Daher Kopfzeilen nicht per fixer Position/Sprache, sondern per Muster suchen.
+  let raum = '', headerIdx = -1;
+  for(let i = 0; i < Math.min(rows.length, 12); i++){
+    const c0 = String(rows[i]?.[0] ?? '').trim();
+    const m = c0.match(/^(Raum|Room|Pièce|Piece|Stanza|Habitación|Habitacion)\s*:\s*(.+)$/i);
+    if(m && !raum) raum = m[2].trim();
+    if(/^(Date|Datum|Data|Fecha)$/i.test(c0) && rows[i]?.[1] != null){ headerIdx = i; break; }
+  }
+  if(!raum) throw new Error(`${fileName}: Raum-Zeile nicht gefunden (erwartet "Raum: ..." oder "Room: ...").`);
+  if(headerIdx < 0) throw new Error(`${fileName}: Kopfzeile mit "Date/Datum" nicht gefunden.`);
 
-  const headerLine = String(rows[3]?.[1] || '');
+  const headerLine = String(rows[headerIdx][1] || '');
   let valueType, unit, label, suffix;
-  if(/Celsius/i.test(headerLine)){
+  if(/Celsius|Temperatur|Temperature/i.test(headerLine)){
     valueType = 'C'; unit = '°C'; label = 'Temperatur (°C)'; suffix = '(Temp)';
-  }else if(/Luftfeuchtigkeit/i.test(headerLine)){
+  }else if(/Luftfeuchtigkeit|Humidity|Humidit|Umidit|Humedad/i.test(headerLine)){
     valueType = 'RelLuft'; unit = '%'; label = 'Luftfeuchtigkeit (%)'; suffix = '(Luftf.)';
   }else{
-    throw new Error(`${fileName}: unbekannte Spalte "${headerLine}" (erwartet Temperatur/Celsius oder Luftfeuchtigkeit).`);
+    throw new Error(`${fileName}: unbekannte Spalte "${headerLine}" (erwartet Temperatur/Temperature/Celsius oder Luftfeuchtigkeit/Humidity).`);
   }
 
   const byDay = {};
-  for(let i = 4; i < rows.length; i++){
+  for(let i = headerIdx + 1; i < rows.length; i++){
     const r = rows[i];
     if(!r || r[0] == null || r[1] == null) continue;
     const d = r[0] instanceof Date ? r[0] : new Date(r[0]);
