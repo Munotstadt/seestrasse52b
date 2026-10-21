@@ -129,14 +129,8 @@ async function ensureRoomParameter(client, cache, roomName, unit, suffix){
     return cache[cacheKey];
   }
 
-  const name = `${roomName} ${suffix}`;
-  const res = await client.execute(
-    "INSERT INTO seestrasse52b_parameter (Name, Einheit, Active, ParaType, Label, ParaGroup, table_field, table_name) VALUES (?, ?, 1, 'Sensor', ?, 'Eve Räume', 'parameterID', 'seestrasse52b_values')",
-    [name, unit, roomName]
-  );
-  const newId = res.meta?.last_row_id;
-  cache[cacheKey] = newId;
-  return newId;
+  // Eve-Parameter sind fest vorgegeben und werden nie dynamisch angelegt.
+  throw new Error(`Kein Parameter "${roomName} ${suffix}" in ParaGroup 'Eve Räume' gefunden – Upload abgebrochen (es werden keine Parameter automatisch angelegt).`);
 }
 
 async function uploadDailyAverages(client, parameterId, dailyAverages, source){
