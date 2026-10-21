@@ -24,7 +24,7 @@
     Eve-Export-Dateien (.xlsx) auswählen — Temperatur- und Luftfeuchtigkeit-Dateien können gemischt
     und für mehrere Räume gleichzeitig hochgeladen werden. Pro Tag wird der Durchschnitt berechnet;
     Tage mit weniger als <span id="minRowsLabel" class="mono"></span> Messungen werden übersprungen.
-    Ein erneuter Upload überschreibt bereits vorhandene Tage automatisch (kein Duplikat).
+    Es werden nur Tage hochgeladen, die in der Datenbank noch fehlen; bereits vorhandene Tage bleiben unverändert. Die Parameter sind fest vorgegeben und werden nie angelegt oder geändert.
   </p>
   <div class="card" style="margin-bottom:26px;">
     <div class="field">
@@ -138,8 +138,7 @@ async function uploadDailyAverages(client, parameterId, dailyAverages, source){
     await client.execute(
       `INSERT INTO seestrasse52b_values (date, ParameterID, value, source)
        VALUES (?, ?, ?, ?)
-       ON CONFLICT(date, ParameterID)
-       DO UPDATE SET value = excluded.value, source = excluded.source, modified_at = datetime('now')`,
+       ON CONFLICT(date, ParameterID) DO NOTHING`,
       [d.day, parameterId, d.value, source]
     );
   }
