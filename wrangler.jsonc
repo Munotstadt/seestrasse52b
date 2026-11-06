@@ -5,9 +5,9 @@
 "assets": {
 "directory": "./public",
 "binding": "ASSETS",
-// /dash ohne Slash soll ohne Redirect direkt das UI liefern (siehe src/dash/index.js). Alle anderen
+// / (Startseite) und /dash ohne Slash liefern ohne Redirect direkt das Dashboard-UI (siehe src/dash/index.js). Alle anderen
 // statischen Dateien (auch /dash/css, /dash/js, /dash/vendor) werden weiterhin direkt am Edge ausgeliefert.
-"run_worker_first": ["/dash"]
+"run_worker_first": ["/", "/dash"]
 },
 "d1_databases": [
 {

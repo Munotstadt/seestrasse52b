@@ -27,6 +27,11 @@ export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
 
+    // Startseite: Dashboard (die frühere Parameter-Übersicht heisst jetzt «Overview» → /overview.html)
+    if (url.pathname === '/' || url.pathname === '/index.html') {
+      return env.ASSETS.fetch(new Request(new URL('/dash/', url), request));
+    }
+
     // /dash: Dashboard (Online-Version des lokalen NAS-Dashboards), siehe src/dash/index.js
     if (url.pathname === '/dash' || url.pathname.startsWith('/dash/')) {
       const res = await handleDash(request, env, ctx);

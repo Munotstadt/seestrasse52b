@@ -40,6 +40,8 @@ Ablauf bei einer Änderung: im Repo ändern → `node scripts/dash-check.mjs` �
   (6 min / 10 min / 30 min) passiert in SQL, nicht im Browser.
 - Browser zeigt beim Öffnen sofort die letzte Antwort (localStorage), frische Daten ersetzen sie (`apiSWR`).
 - `/dash` (ohne Slash) wird ohne Redirect ausgeliefert.
+- Online ist das Dashboard auch die Startseite: `/` (und `/index.html`) liefert dasselbe UI (`src/index.js`). Die frühere
+  Parameter-Übersicht heisst «Overview» (`/overview.html`) und ist online als Reiter verlinkt (`CONFIG.links`).
 
 ## Online-Umfang
 
