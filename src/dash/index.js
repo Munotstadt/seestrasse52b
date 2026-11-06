@@ -19,6 +19,8 @@ const CONFIG = {
   mode: 'remote',
   pages: { temperatur: 'live', water: 'pending', storen: 'pending', energy: 'live', car: 'live' },
   control: { water: false, blinds: false, car: false },
+  // Zusätzliche Reiter rechts in der Navigation (nur online: die Parameter-App gibt es nur hier)
+  links: [{ label: 'Overview', href: '/overview.html' }],
 };
 const CONFIG_JS = `export default ${JSON.stringify(CONFIG)};\n`;
 
@@ -29,7 +31,7 @@ export async function handleDash(request, env, ctx) {
   const url = new URL(request.url);
   const p = url.pathname;
 
-  // /dash → UI-Einstieg (ohne Redirect; <base href="/dash/"> in index.html löst die relativen Pfade auf)
+  // / und /dash → UI-Einstieg (/ siehe src/index.js) (ohne Redirect; <base href="/dash/"> in index.html löst die relativen Pfade auf)
   if (p === '/dash') return env.ASSETS.fetch(new Request(new URL('/dash/', url), request));
 
   if (p === '/dash/config.js') {

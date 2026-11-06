@@ -38,6 +38,13 @@ nav.tabs a{
   padding:7px 12px;border-radius:var(--radius);
 }
 nav.tabs a.active,nav.tabs a:hover{background:var(--grey-100);}
+nav.tabs a{white-space:nowrap;}
+@media (max-width:700px){
+  header.topbar{gap:12px;}
+  header.topbar .brand{flex:none;}
+  nav.tabs{min-width:0;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;}
+  nav.tabs a{padding:7px 9px;}
+}
 
 main{max-width:1080px;margin:0 auto;padding:24px 20px 60px;}
 
@@ -116,6 +123,9 @@ svg.chart{width:100%;height:280px;display:block;}
 .seg-btn:last-child{border-right:none;}
 .seg-btn.active{background:var(--ink);color:#fff;}
 .seg-btn:hover:not(.active){background:var(--grey-100);}
+.chart-controls{display:flex;flex-wrap:wrap;gap:0 10px;}
+.chart-controls .seg-btn{white-space:nowrap;}
+@media (max-width:600px){ #rangeGroup .seg-btn{padding:7px 10px;} #rangeGroup .unit{display:none;} }
 
 .chart-legend{display:flex;gap:16px;font-size:12px;color:var(--grey-600);margin-bottom:8px;}
 .chart-legend span{display:inline-flex;align-items:center;gap:6px;}

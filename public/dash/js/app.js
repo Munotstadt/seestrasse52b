@@ -25,7 +25,9 @@ let unmount = null, token = 0;
 
 nav.innerHTML = PAGES.map(p => isLive(p)
   ? `<a class="tab" data-id="${p.id}" href="#/${p.id}">${p.label}</a>`
-  : `<a class="tab disabled" data-id="${p.id}" href="#/${p.id}" title="pendent">${p.label}<small>pendent</small></a>`).join("");
+  : `<a class="tab disabled" data-id="${p.id}" href="#/${p.id}" title="pendent">${p.label}<small>pendent</small></a>`).join("")
+  // cfg.links: externe Reiter je Umgebung (online z.B. «Overview» → Parameter-App), lokal leer
+  + (Array.isArray(cfg.links) ? cfg.links : []).map(l => `<a class="tab link" href="${l.href}">${l.label}</a>`).join("");
 
 async function route() {
   const id = location.hash.replace(/^#\//, "");

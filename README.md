@@ -76,7 +76,7 @@ keine DNS-/Custom-Domain-Verwaltung, kein Worker-Deploy).
    erreichbar.
 
 5. **Smoke-Test**
-   `52b.munot.app` aufrufen → Google-Login → Übersicht sollte die bestehenden
+   `52b.munot.app` aufrufen → Google-Login → Dashboard erscheint, «Overview» sollte die bestehenden
    Parameter (Wasserhärte, at home, Eve-Räume, Auto Skoda, …) mit den echten
    Werten zeigen. Danach admin.html/log.html/eve-data.html/uploader.html
    durchklicken.
@@ -90,7 +90,7 @@ keine DNS-/Custom-Domain-Verwaltung, kein Worker-Deploy).
 ├── .github/workflows/
 │   └── deploy.yml         Deploy bei Push auf main
 └── public/
-    ├── index.html          Übersicht
+    ├── overview.html       Overview (Parameter-Übersicht); Startseite / = Dashboard
     ├── admin.html          Parameter verwalten
     ├── log.html            Generischer Log-Eintrag
     ├── parameter.html      Detail-Chart pro Parameter
